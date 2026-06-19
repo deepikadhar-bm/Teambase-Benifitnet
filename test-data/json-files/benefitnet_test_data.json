@@ -1,0 +1,647 @@
+[
+  {
+    "templateName": "Add Members Bulk",
+    "company": "Syslatech_TestClient1",
+    "policy": "MedicalPolicy1_Syslatech_TestClient1",
+    "createdAt": "15/06/2026, 22:46:24 IST",
+    "description": "Standard principal member - UAE expat from Dubai. Used in clientDetailsPage two-round validation spec.",
+    "columns": [
+      {
+        "excelHeader": "BenefitNet ID",
+        "fieldKey": "benefitNetId",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Auto-assigned by system, leave blank on import"
+      },
+      {
+        "excelHeader": "First Name (*)",
+        "fieldKey": "firstName",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Middle Name",
+        "fieldKey": "middleName",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Last Name (*)",
+        "fieldKey": "lastName",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Generated dynamically per test run"
+      },
+      {
+        "excelHeader": "Date Of Birth (*)",
+        "fieldKey": "dateOfBirth",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Format: DD/MM/YYYY"
+      },
+      {
+        "excelHeader": "Gender (*)",
+        "fieldKey": "gender",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "Gender",
+        "allowedValues": [
+          "Male",
+          "Female"
+        ],
+        "notes": null
+      },
+      {
+        "excelHeader": "Age",
+        "fieldKey": "age",
+        "mandatory": false,
+        "inputType": "formula",
+        "referenceSheet": null,
+        "notes": "Calculated by Excel formula. Do not write."
+      },
+      {
+        "excelHeader": "Birth Certificate ID",
+        "fieldKey": "birthCertificateId",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Marital Status (*)",
+        "fieldKey": "maritalStatus",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "Marital",
+        "allowedValues": [
+          "Divorced",
+          "Married",
+          "Single",
+          "Unknown",
+          "Widowed"
+        ],
+        "notes": null
+      },
+      {
+        "excelHeader": "Nationality (*)",
+        "fieldKey": "nationality",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "Country",
+        "notes": null
+      },
+      {
+        "excelHeader": "Member Type (*)",
+        "fieldKey": "memberType",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "Member Type",
+        "allowedValues": [
+          "1 = UAE National",
+          "2 = GCC National",
+          "3 = Diplomat",
+          "4 = Expat who's residency is issued in Dubai",
+          "5 = Expat who's residency is issued in Emirates other than Dubai",
+          "6 = Newborn"
+        ],
+        "notes": null
+      },
+      {
+        "excelHeader": "Relation (*)",
+        "fieldKey": "relation",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "Type",
+        "allowedValues": [
+          "Principal",
+          "Spouse",
+          "Child"
+        ],
+        "notes": null
+      },
+      {
+        "excelHeader": "Sub-Member Type (*) \n\n(HAAD required)",
+        "fieldKey": "subMemberType",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "SubMember Type",
+        "allowedValues": [
+          "Abu Dhabi member moving to a new company in Abu Dhabi",
+          "New Born Baby (Born Inside UAE)",
+          "New Born Baby (Born Outside UAE)",
+          "New Comer",
+          "Non-Abu Dhabi member moving to Abu Dhabi member",
+          "Visit Visa/Visa on Arrival moving to an AUH Visa"
+        ],
+        "notes": null
+      },
+      {
+        "excelHeader": "Employee Number (*)",
+        "fieldKey": "employeeNumber",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Generated dynamically per test run. Format: EMP + 6 digits"
+      },
+      {
+        "excelHeader": "Membership No.",
+        "fieldKey": "membershipNo",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Member ID",
+        "fieldKey": "memberId",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Certificate Number",
+        "fieldKey": "certificateNumber",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Principal Membership Number",
+        "fieldKey": "principalMembershipNumber",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Category",
+        "fieldKey": "category",
+        "mandatory": false,
+        "inputType": "dropdown",
+        "referenceSheet": null,
+        "notes": "Policy-specific. Value derived from policy name at runtime."
+      },
+      {
+        "excelHeader": "Addition Date (*)",
+        "fieldKey": "additionDate",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Format: DD/MM/YYYY. Generated dynamically per test run."
+      },
+      {
+        "excelHeader": "Deletion Date",
+        "fieldKey": "deletionDate",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Format: DD/MM/YYYY. Used for member removal flows only."
+      },
+      {
+        "excelHeader": "Establishment Type (*)",
+        "fieldKey": "establishmentType",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "Estab Type",
+        "allowedValues": [
+          "UAE Citizen",
+          "GCC Citizen",
+          "Establishment",
+          "Investor Visa",
+          "Resident",
+          "Resident(By other Sponsorship)",
+          "Resident(Sponsored by Employee)"
+        ],
+        "notes": null
+      },
+      {
+        "excelHeader": "Establishment ID (*)",
+        "fieldKey": "establishmentId",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Generated dynamically per test run. Format: EST + 6 digits"
+      },
+      {
+        "excelHeader": "Country of Residence (*)",
+        "fieldKey": "countryOfResidence",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "Country",
+        "notes": null
+      },
+      {
+        "excelHeader": "Visa Issuance Location (*)",
+        "fieldKey": "visaIssuanceLocation",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "VisaIssuance",
+        "notes": null
+      },
+      {
+        "excelHeader": "Work City (*)",
+        "fieldKey": "workCity",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "UAE",
+        "allowedValues": [
+          "Abu Dhabi",
+          "Ajman",
+          "Dubai",
+          "Fujairah",
+          "Ras Al Khaimah",
+          "Sharjah",
+          "Umm Al Quwain"
+        ],
+        "notes": null
+      },
+      {
+        "excelHeader": "Work Area (*)",
+        "fieldKey": "workArea",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "DubaiAreas",
+        "notes": "Tied to Work City selection"
+      },
+      {
+        "excelHeader": "Residential City (*)",
+        "fieldKey": "residentialCity",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "UAE",
+        "notes": null
+      },
+      {
+        "excelHeader": "Residential Area (*)",
+        "fieldKey": "residentialArea",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "DubaiAreas",
+        "notes": "Tied to Residential City selection"
+      },
+      {
+        "excelHeader": "UID Number (*)",
+        "fieldKey": "uidNumber",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Generated dynamically per test run. Format: UID + 12 digits"
+      },
+      {
+        "excelHeader": "File Number (*)",
+        "fieldKey": "fileNumber",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Generated dynamically per test run. Format: FILE + 9 digits"
+      },
+      {
+        "excelHeader": "National ID Number (*)",
+        "fieldKey": "nationalIdNumber",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Generated dynamically per test run. Format: NID + 9 digits"
+      },
+      {
+        "excelHeader": "ID Expiry Date",
+        "fieldKey": "idExpiryDate",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Format: DD/MM/YYYY"
+      },
+      {
+        "excelHeader": "Passport Number (*)",
+        "fieldKey": "passportNumber",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Generated dynamically per test run. Format: Letter + 7 digits"
+      },
+      {
+        "excelHeader": "Passport Expiry Date",
+        "fieldKey": "passportExpiryDate",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Format: DD/MM/YYYY"
+      },
+      {
+        "excelHeader": "Phone Number (*)",
+        "fieldKey": "phoneNumber",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Generated dynamically per test run. Format: +9715XXXXXXXX"
+      },
+      {
+        "excelHeader": "Email (*)",
+        "fieldKey": "email",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Generated dynamically per test run. Format: syslatech_hr1_XXX@yopmail.com"
+      },
+      {
+        "excelHeader": "Alternative Email (*)",
+        "fieldKey": "alternativeEmail",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Commission Based (*)",
+        "fieldKey": "commissionBased",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "Commission",
+        "allowedValues": [
+          "Yes",
+          "No"
+        ],
+        "notes": null
+      },
+      {
+        "excelHeader": "Salary Bracket (*)",
+        "fieldKey": "salaryBracket",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "SalaryBracket",
+        "allowedValues": [
+          "Less than AED 4,000 per month",
+          "Between AED 4,001 and 12,000 per month",
+          "More than AED 12,000 per month"
+        ],
+        "notes": null
+      },
+      {
+        "excelHeader": "Salary Type (*)",
+        "fieldKey": "salaryType",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "Salary Type",
+        "allowedValues": [
+          "Basic",
+          "Gross"
+        ],
+        "notes": null
+      },
+      {
+        "excelHeader": "Salary Currency (*)",
+        "fieldKey": "salaryCurrency",
+        "mandatory": true,
+        "inputType": "dropdown",
+        "referenceSheet": "Currency",
+        "notes": null
+      },
+      {
+        "excelHeader": "Annual Salary (*)",
+        "fieldKey": "annualSalary",
+        "mandatory": true,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Numeric value"
+      },
+      {
+        "excelHeader": "Annual Allowances",
+        "fieldKey": "annualAllowances",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Employment Date",
+        "fieldKey": "employmentDate",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Format: DD/MM/YYYY"
+      },
+      {
+        "excelHeader": "Job Position",
+        "fieldKey": "jobPosition",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Job Grade",
+        "fieldKey": "jobGrade",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Department",
+        "fieldKey": "department",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Cost Center",
+        "fieldKey": "costCenter",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Documents\n\nProvide Zip file name for Member",
+        "fieldKey": "documents",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Attach zip file name containing member documents"
+      },
+      {
+        "excelHeader": "Picture File Name",
+        "fieldKey": "pictureFileName",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": null
+      },
+      {
+        "excelHeader": "Validation Comments",
+        "fieldKey": "validationComments",
+        "mandatory": false,
+        "inputType": "text",
+        "referenceSheet": null,
+        "notes": "Populated by system after validation. Do not write."
+      }
+    ],
+    "testProfiles": [
+      {
+        "profileName": "User Profile 1 - Male Principal Member (Round 1 Partial)",
+        "description": "Male member — Round 1 partial upload. Intentionally omits gender, email, maritalStatus, nationality, relation, category, establishmentId, uidNumber, fileNumber, passportNumber, phoneNumber, visaIssuanceLocation, workCity, workArea, residentialCity, residentialArea to trigger staged validation discovery.",
+        "memberData": {
+          "firstName": "Sysla",
+          "lastName": "__DYNAMIC__lastName",
+          "dateOfBirth": "__DYNAMIC__dob",
+          "additionDate": "__DYNAMIC__additionDate",
+          "employeeNumber": "__DYNAMIC__employeeNumber",
+          "nationalIdNumber": "__DYNAMIC__nationalIdNumber",
+          "countryOfResidence": "United Arab Emirates",
+          "memberType": "4 = Expat who's residency is issued in Dubai"
+        },
+        "notes": "Use tdm.generateRuntimeDataForGender('Male'). Omits gender intentionally to trigger Round 1 validation discovery."
+      },
+      {
+        "profileName": "User Profile 1 - Male Principal Member (Round 2 Full)",
+        "description": "Male member — Round 2 complete upload with ALL mandatory fields filled.",
+        "memberData": {
+          "firstName": "Sysla",
+          "lastName": "__DYNAMIC__lastName",
+          "dateOfBirth": "__DYNAMIC__dob",
+          "gender": "Male",
+          "email": "__DYNAMIC__email",
+          "additionDate": "__DYNAMIC__additionDate",
+          "employeeNumber": "__DYNAMIC__employeeNumber",
+          "countryOfResidence": "United Arab Emirates",
+          "nationalIdNumber": "__DYNAMIC__nationalIdNumber",
+          "uidNumber": "__DYNAMIC__uidNumber",
+          "fileNumber": "__DYNAMIC__fileNumber",
+          "passportNumber": "__DYNAMIC__passportNumber",
+          "phoneNumber": "__DYNAMIC__phoneNumber",
+          "establishmentId": "__DYNAMIC__establishmentId",
+          "memberType": "4 = Expat who's residency is issued in Dubai",
+          "maritalStatus": "Married",
+          "nationality": "India",
+          "relation": "Principal",
+          "category": "__POLICY_CATEGORY__",
+          "subMemberType": "New Comer",
+          "visaIssuanceLocation": "Dubai",
+          "workCity": "Dubai",
+          "workArea": "AL KARAMA",
+          "residentialCity": "Dubai",
+          "residentialArea": "AL BARSHA FIRST",
+          "commissionBased": "No",
+          "salaryBracket": "Between AED 4,001 and 12,000 per month",
+          "salaryType": "Basic",
+          "salaryCurrency": "UAE Dirham (AED)",
+          "establishmentType": "Establishment",
+          "annualSalary": "60000"
+        },
+        "notes": "Use tdm.generateRuntimeDataForGender('Male'). __POLICY_CATEGORY__ derived from captured policy name."
+      },
+      {
+        "profileName": "User Profile 2 - Female Principal Member (Round 1 Partial)",
+        "description": "Female member — Round 1 partial upload. Includes gender=Female and email but omits maritalStatus, nationality, relation, category and regulatory fields.",
+        "memberData": {
+          "firstName": "Sysla",
+          "lastName": "__DYNAMIC__lastName",
+          "dateOfBirth": "__DYNAMIC__dob",
+          "gender": "Female",
+          "email": "__DYNAMIC__email",
+          "additionDate": "__DYNAMIC__additionDate",
+          "employeeNumber": "__DYNAMIC__employeeNumber",
+          "countryOfResidence": "United Arab Emirates",
+          "nationalIdNumber": "__DYNAMIC__nationalIdNumber",
+          "memberType": "4 = Expat who's residency is issued in Dubai"
+        },
+        "notes": "Use tdm.generateRuntimeDataForGender('Female') to generate runtime values for this profile."
+      },
+      {
+        "profileName": "User Profile 2 - Female Principal Member (Round 2 Full)",
+        "description": "Female member — Round 2 complete upload with ALL mandatory fields filled.",
+        "memberData": {
+          "firstName": "Sysla",
+          "lastName": "__DYNAMIC__lastName",
+          "dateOfBirth": "__DYNAMIC__dob",
+          "gender": "Female",
+          "email": "__DYNAMIC__email",
+          "additionDate": "__DYNAMIC__additionDate",
+          "employeeNumber": "__DYNAMIC__employeeNumber",
+          "countryOfResidence": "United Arab Emirates",
+          "nationalIdNumber": "__DYNAMIC__nationalIdNumber",
+          "uidNumber": "__DYNAMIC__uidNumber",
+          "fileNumber": "__DYNAMIC__fileNumber",
+          "passportNumber": "__DYNAMIC__passportNumber",
+          "phoneNumber": "__DYNAMIC__phoneNumber",
+          "establishmentId": "__DYNAMIC__establishmentId",
+          "memberType": "4 = Expat who's residency is issued in Dubai",
+          "maritalStatus": "Married",
+          "nationality": "India",
+          "relation": "Principal",
+          "category": "__POLICY_CATEGORY__",
+          "subMemberType": "New Comer",
+          "visaIssuanceLocation": "Dubai",
+          "workCity": "Dubai",
+          "workArea": "AL KARAMA",
+          "residentialCity": "Dubai",
+          "residentialArea": "AL BARSHA FIRST",
+          "commissionBased": "No",
+          "salaryBracket": "Between AED 4,001 and 12,000 per month",
+          "salaryType": "Basic",
+          "salaryCurrency": "UAE Dirham (AED)",
+          "establishmentType": "Establishment",
+          "annualSalary": "60000"
+        },
+        "notes": "Use tdm.generateRuntimeDataForGender('Female'). __POLICY_CATEGORY__ derived from captured policy name."
+      },
+      {
+        "profileName": "Login - Valid Credentials",
+        "description": "Standard QA broker login for BenefitNet portal.",
+        "memberData": {
+          "username": "syslatech_broker1",
+          "password": "Test@1234567"
+        },
+        "notes": "Credentials loaded from env.qa.ts. Do not hardcode here in production."
+      },
+      {
+        "profileName": "Login - Invalid Password",
+        "description": "Triggers 'user name or password provided is incorrect' error.",
+        "memberData": {
+          "username": "syslatech_broker1",
+          "password": "WrongPass"
+        },
+        "notes": null
+      },
+      {
+        "profileName": "Login - Empty Fields",
+        "description": "Triggers field-level validation for both username and password.",
+        "memberData": {
+          "username": "",
+          "password": ""
+        },
+        "notes": null
+      }
+    ],
+    "defaultFieldValues": {
+      "gender": "Male",
+      "maritalStatus": "Married",
+      "nationality": "India",
+      "countryOfResidence": "United Arab Emirates",
+      "memberType": "4 = Expat who's residency is issued in Dubai",
+      "relation": "Principal",
+      "subMemberType": "New Comer",
+      "visaIssuanceLocation": "Dubai",
+      "workCity": "Dubai",
+      "workArea": "AL KARAMA",
+      "residentialCity": "Dubai",
+      "residentialArea": "AL BARSHA FIRST",
+      "establishmentType": "Establishment",
+      "commissionBased": "No",
+      "salaryBracket": "Between AED 4,001 and 12,000 per month",
+      "salaryType": "Basic",
+      "salaryCurrency": "UAE Dirham (AED)",
+      "annualSalary": "60000"
+    }
+  }
+]

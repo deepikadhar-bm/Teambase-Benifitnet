@@ -1,0 +1,57 @@
+{
+    "sets": [
+        {
+            "setName": "Valid credentials",
+            "enabled": true,
+            "username": "syslatech_broker1",
+            "password": "Test@1234567",
+            "expected": "success",
+            "errorField": null
+        },
+        {
+            "setName": "Wrong username and password",
+            "enabled": true,
+            "username": "wrong@bn.com",
+            "password": "WrongPass",
+            "expected": "failure",
+            "errorField": "credential",
+            "errorMsg": "The user name or password provided is incorrect"
+        },
+        {
+            "setName": "Empty username only",
+            "enabled": true,
+            "username": "",
+            "password": "Admin@123",
+            "expected": "failure",
+            "errorField": "username",
+            "errorMsg": "The User name field is required"
+        },
+        {
+            "setName": "Empty password only",
+            "enabled": true,
+            "username": "admin@benefitnet.com",
+            "password": "",
+            "expected": "failure",
+            "errorField": "password",
+            "errorMsg": "The Password field is required"
+        },
+        {
+            "setName": "Both fields empty",
+            "enabled": true,
+            "username": "",
+            "password": "",
+            "expected": "failure",
+            "errorField": "both",
+            "errorMsg": "The user name or password provided is incorrect"
+        },
+        {
+            "setName": "User email not specified",
+            "enabled": true,
+            "username": "notanemail",
+            "password": "Admin@123",
+            "expected": "failure",
+            "errorField": "credential",
+            "errorMsg": "User email is not specified"
+        }
+    ]
+}

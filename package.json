@@ -1,0 +1,55 @@
+{
+  "name": "enterprise-playwright-tests",
+  "version": "2.0.0",
+  "description": "Enterprise-level Playwright automation framework for web UI and API testing.",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:dev": "cross-env ENVIRONMENT=dev npx playwright test --headed",
+    "test:qa": "cross-env ENVIRONMENT=qa npx playwright test",
+    "test:api": "npx playwright test src/tests/api/",
+    "test:ui": "npx playwright test src/tests/ui/",
+    "test:mmt": "npx playwright test src/tests/ui/mmt/",
+    "test:headed": "npx playwright test --headed",
+    "test:debug": "npx playwright test --debug",
+    "test:chrome": "npx playwright test --project=chromium",
+    "test:firefox": "npx playwright test --project=firefox",
+    "test:webkit": "npx playwright test --project=webkit",
+    "test:parallel": "npx playwright test --workers=4",
+    "test:report": "npx playwright show-report",
+    "test:ui-mode": "npx playwright test --ui",
+    "codegen": "npx playwright codegen"
+  },
+  "keywords": [
+    "playwright",
+    "automation",
+    "testing",
+    "enterprise",
+    "e2e",
+    "page-object-model",
+    "framework"
+  ],
+  "author": "K. Sai Raj",
+  "license": "MIT",
+  "dependencies": {
+    "cross-env": "^7.0.3",
+    "csv-parse": "^6.1.0",
+    "dotenv": "^16.6.1",
+    "exceljs": "^4.4.0",
+    "fs-extra": "^11.3.2",
+    "xlsx": "^0.18.5",
+    "xlsx-populate": "^1.21.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/fs-extra": "^11.0.4",
+    "@types/jquery": "^3.5.33",
+    "@types/node": "^20.12.12",
+    "allure-commandline": "^2.42.1",
+    "allure-playwright": "^3.10.0",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.4.5"
+  },
+  "type": "commonjs"
+}
