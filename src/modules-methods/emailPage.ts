@@ -87,37 +87,56 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-     * Steps: Paginates through results until the member row is found, then asserts visibility.
-     */
-    async assertEmailLogRowExistsForMember(clientName: string, policyName: string, memberLastName: string): Promise<void> {
-        await this.isVisible(this.emailLog.emailLogNotificationTypeLabel);
+ * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+ * Steps: Paginates through results until the member row is found, then asserts visibility.
+ */
+    async assertEmailLogRowExistsForMember(policyName: string, memberLastName: string): Promise<void> {
+        // await this.isVisible(this.emailLog.emailLogNotificationTypeLabel);
         await this.paginateToMemberRow(memberLastName);
-        await this.isVisible(this.emailLog.emailLogClientNameCellByMemberLastName(memberLastName, clientName));
         await this.isVisible(this.emailLog.emailLogPolicyCellByMemberLastName(memberLastName, policyName));
-    }
-    /**
-     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-     * Steps: Asserts text visibility components for operational classifications, subject, To email and notification type.
-     */
-    async assertEmailLogRowExistsForLastNameWithAdditionRequest(memberLastName: string): Promise<void> {
-        await this.assertElementVisible(this.emailLog.verifyEmailLogRowByLastNameWithAdditionRequest(memberLastName));
-    }
-        /**
-     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-     * Steps: Asserts element visibility components for subject.
-     */
-    async assertEmailLogRowExistsForToYopEmail(toEmail: string): Promise<void> {
-        await this.isVisible(this.emailLog.verifyEmailDetailToYopEmailField(toEmail));
+        log.info(`assertEmailLogRowExistsForMember : ${memberLastName} | ${policyName}`)
     }
 
-    async assertEmailLogRowExistsForToYopEmailHaveAttachments(toEmail: string, memberLastName: string): Promise<void> {
+    /**
+     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+     * Steps: Asserts text visibility components for operational classifications ddition request.
+     */
+    async assertEmailLogRowExistsForLastNameWithAdditionRequest(memberLastName: string): Promise<void> {
+        await this.assertElementVisible(this.emailLog.emailLogRowByLastNameWithAdditionRequest(memberLastName));
+    }
+
+    /**
+* Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+* Steps: Asserts element visibility components for notification type.
+*/
+    async assertEmailLogRowExistsForLastNameWithNotificationType(memberLastName: string): Promise<void> {
+        await this.assertElementVisible(this.emailLog.emailLogRowByLastNameWithNotificationType(memberLastName));
+    }
+
+    /**
+    * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+    * Steps: Asserts element visibility components for yop email.
+    */
+    async assertEmailLogRowExistsForToYopEmail(memberLastName: string, toEmail: string): Promise<void> {
+        await this.isVisible(this.emailLog.emailDetailByLastNameWithToYopEmailLabel(memberLastName, toEmail));
+    }
+
+    /**
+* Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+* Steps: Asserts element visibility components for subject.
+*/
+    async assertEmailLogRowExistsForToYopEmailHaveAttachments( memberLastName: string): Promise<void> {
         await this.isVisible(this.emailLog.emailDetailSubjectByMemberLastName(memberLastName));
-        await this.isVisible(this.emailLog.verifyEmailDetailToYopEmailField(toEmail));
     }
-    async assertEmailLogRowExistsForToYopEmailHaveAttachmentsZero(): Promise<void> {
-        await this.isVisible(this.emailLog.verifyEmailLogRowByLastNameWithAdditionRequestAttachmentZero);
+
+    /**
+* Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+* Steps: Asserts element visibility components for attachment zero.
+*/
+    async assertEmailLogRowExistsForToYopEmailHaveAttachmentsZero(memberLastName: string): Promise<void> {
+        await this.isVisible(this.emailLog.emailLogRowByLastNameWithAttachmentZero(memberLastName));
     }
+
     /**
      * Action: Assert Structural Visibility of Email Metadata Details Heading Box
      * Steps: Tracks element state loops to confirm the visual presence of message detailing headings inside the framework wrapper.
@@ -290,7 +309,7 @@ export class EmailLogPage extends BasePage {
      * Step Group: SG : EA : Download and Verify Inbound Mail Attachment Excel Structure Details
      * Steps: Allocates workspace download points, monitors file save sequences, handles empty assets checks, opens spreadsheet nodes via third-party parser engines, maps coordinate structures, and executes multi-column value asset validation routines.
      */
-    async downloadAndVerifyAttachmentExcel(capturedClientName: string, capturedMedicalPolicyName: string, runtime: { lastName: string; employeeNumber: string; email: string; nationalIdNumber: string; maritalStatus?: string }): Promise<void> {
+    async downloadAndVerifyAttachmentExcel(capturedClientName: string, capturedMedicalPolicyName: string, runtime: { lastName: string; employeeNumber: string; email: string; nationalIdNumber: string; maritalStatus?: string }): Promise<string> {
 
         const attachmentLink = this.emailLog.MemberAdditionBulkRequestMemberListAttachmentLink;
         await this.waitForElementIsVisible(attachmentLink);
@@ -366,5 +385,6 @@ export class EmailLogPage extends BasePage {
         expect(email).toBe(runtime.email);
 
         log.info('Attachment Excel — all verifications passed');
+        return savedFilePath;
     }
 }

@@ -20,39 +20,50 @@
 //   16. writeText              — write string to file
 //   17. getLatestFile          — get newest file in folder
 //   18. fileExists             — check file exists
+//   19. findRowByAnyValue      — search every cell for a value (TYPE A Excel)
+//   20. verifyRowContainsAll   — assert row contains all expected values
+//   21. readExcelAllText       — read all cell text from a sheet (TYPE C Excel)
+//   22. verifyMemberListAttachmentExcel  — verify MemberList attachment Excel
+//   23. verifyWorkflowLogsExcelMemberRow — verify Workflow Logs Excel row
+//   24. verifyConsolidatedMembershipExcelMemberRow — verify Consolidated Excel
+//   25. setTestContext         — set TC_ID for scoped download folder
+//   26. getTcDownloadDir       — get TC-scoped download folder path
+//   27. clearTestContext       — reset TC context (call in afterAll)
+//   28. captureExcelStep       — save labeled snapshot + log diff between steps
+//   29. clearExcelStepHistory  — reset step history for a TC (call in afterAll)
 // ============================================================================
 
-import * as fs from "fs";
+import * as fs   from "fs";
 import * as path from "path";
-import ExcelJS from "exceljs";
+import ExcelJS   from "exceljs";
 import { parse } from "csv-parse/sync";
-import * as fse from "fs-extra";
+import * as fse  from "fs-extra";
 import { Locator } from "@playwright/test";
-import { logger } from "./logger";
+import { logger }  from "./logger";
 
-export type ColumnType = "string" | "number" | "date" | "email" | "boolean";
+export type ColumnType   = "string" | "number" | "date" | "email" | "boolean";
 export interface ColumnSchema { name: string; type: ColumnType; required?: boolean; }
-export type MatchType = "exact" | "contains" | "regex";
+export type MatchType    = "exact" | "contains" | "regex";
 export type LocationType = "near-label" | "anywhere" | "auto";
 
 export interface BillField {
-  label: string;
-  amount?: string;
-  text?: string;
-  match?: MatchType;
+  label:     string;
+  amount?:   string;
+  text?:     string;
+  match?:    MatchType;
   location?: LocationType;
   currency?: string;
 }
 
 export interface BillFieldResult extends BillField {
-  found: boolean;
+  found:        boolean;
   matchedValue: string;
-  matchedLine: string;
-  lineNumber: number;
-  strategy: string;
-  confidence: "high" | "medium" | "low";
-  fieldType: "amount" | "text";
-  reason?: string;
+  matchedLine:  string;
+  lineNumber:   number;
+  strategy:     string;
+  confidence:   "high" | "medium" | "low";
+  fieldType:    "amount" | "text";
+  reason?:      string;
 }
 
 export interface PdfBillResult {
@@ -75,28 +86,33 @@ export interface ColumnError {
   row: number; column: string; value: any; expected: ColumnType; reason: string;
 }
 
-const MASTER_REPORT_DIR = path.join(process.cwd(), "test-results", "download-reports");
-const MASTER_REPORT_FILE = path.join(MASTER_REPORT_DIR, "master-download-report.xlsx");
-const SEPARATORS = [":", "₹", "Rs.", "Rs ", "INR", "/-", "=", "–", "-"];
-const PROXIMITY = 3;
-const MONEY_PATTERN = /(?:₹|Rs\.?|INR)?\s*[\d,]+(?:\.\d{1,2})?/g;
-const SEP = "─".repeat(80);
+// ── Internal type for Excel step snapshots ────────────────────────────────────
+interface ExcelStepSnapshot {
+  label: string;
+  rows:  Array<Record<string, unknown>>;
+}
 
-// ── Shared log header ─────────────────────────────────────────────────────────
-function logHeader(title: string, fileName: string) {
+const MASTER_REPORT_DIR  = path.join(process.cwd(), "test-results", "download-reports");
+const MASTER_REPORT_FILE = path.join(MASTER_REPORT_DIR, "master-download-report.xlsx");
+const SEPARATORS         = [":", "₹", "Rs.", "Rs ", "INR", "/-", "=", "–", "-"];
+const PROXIMITY          = 3;
+const MONEY_PATTERN      = /(?:₹|Rs\.?|INR)?\s*[\d,]+(?:\.\d{1,2})?/g;
+const SEP                = "─".repeat(80);
+
+function logHeader(title: string, fileName: string): void {
   logger.info("");
   logger.info(SEP);
   logger.info(`${title} | ${fileName}`);
   logger.info(SEP);
 }
 
-function logFooterPass(label: string) {
+function logFooterPass(label: string): void {
   logger.pass(label);
   logger.info(SEP);
   logger.info("");
 }
 
-function logFooterFail(label: string) {
+function logFooterFail(label: string): void {
   logger.warn(label);
   logger.info(SEP);
   logger.info("");
@@ -105,6 +121,15 @@ function logFooterFail(label: string) {
 // ============================================================================
 export class FileUtils {
 
+  // ── Class-level state — declared here, NOT inside methods ─────────────────
+
+  // TEST CONTEXT state
+  private static currentTcId: string = '';
+
+  // EXCEL STEP CAPTURE state
+  private static readonly stepHistory: Map<string, ExcelStepSnapshot[]> = new Map();
+  private static readonly stepCounter: Map<string, number>              = new Map();
+
   // ==========================================================================
   // 1. clickAndVerifyDownload
   // ==========================================================================
@@ -112,14 +137,19 @@ export class FileUtils {
     element: Locator,
     expectedExtension: string,
     options?: {
-      keywords?: string[]; schema?: ColumnSchema[];
-      saveFolder?: string; timeout?: number;
-      testInfo?: any; writeReport?: boolean;
+      keywords?:    string[];
+      schema?:      ColumnSchema[];
+      saveFolder?:  string;
+      timeout?:     number;
+      testInfo?:    any;
+      writeReport?: boolean;
     }
   ): Promise<VerifyResult> {
     const saveFolder = options?.saveFolder ?? path.join(process.cwd(), "test-results", "downloads");
-    const timeout = options?.timeout ?? 30_000;
-    const ext = expectedExtension.startsWith(".") ? expectedExtension.toLowerCase() : `.${expectedExtension.toLowerCase()}`;
+    const timeout    = options?.timeout ?? 30_000;
+    const ext        = expectedExtension.startsWith(".")
+      ? expectedExtension.toLowerCase()
+      : `.${expectedExtension.toLowerCase()}`;
 
     if (!fs.existsSync(saveFolder)) fs.mkdirSync(saveFolder, { recursive: true });
     logger.step(`Click + download + verify → expected: ${ext}`);
@@ -133,9 +163,9 @@ export class FileUtils {
           page.waitForEvent("download", { timeout: attempt === 1 ? timeout : timeout / 2 }),
           element.click(),
         ]);
-        fileName = download.suggestedFilename();
+        fileName  = download.suggestedFilename();
         actualExt = path.extname(fileName).toLowerCase();
-        filePath = path.join(saveFolder, fileName);
+        filePath  = path.join(saveFolder, fileName);
         await download.saveAs(filePath);
         if (!fs.existsSync(filePath)) throw new Error(`File not found after save`);
         const bytes = fs.statSync(filePath).size;
@@ -161,11 +191,11 @@ export class FileUtils {
     let result: VerifyResult;
     switch (ext) {
       case ".xlsx": case ".xls": result = await this.verifyExcel(filePath, options); break;
-      case ".pdf": result = await this.verifyPdf(filePath, options); break;
-      case ".docx": result = await this.verifyDocx(filePath, options); break;
-      case ".csv": result = await this.verifyCsv(filePath, options); break;
-      case ".txt": result = await this.verifyTxt(filePath, options); break;
-      default: result = this.buildResult(filePath, ext, true, [], [], options?.testInfo);
+      case ".pdf":               result = await this.verifyPdf(filePath, options);   break;
+      case ".docx":              result = await this.verifyDocx(filePath, options);  break;
+      case ".csv":               result = await this.verifyCsv(filePath, options);   break;
+      case ".txt":               result = await this.verifyTxt(filePath, options);   break;
+      default:                   result = this.buildResult(filePath, ext, true, [], [], options?.testInfo);
     }
 
     result.downloaded = true;
@@ -178,19 +208,16 @@ export class FileUtils {
 
   // ==========================================================================
   // 2. verifyExcel
-  // --------------------------------------------------------------------------
-  // EXAMPLE:
-  //   const result = await FileUtils.verifyExcel("report.xlsx", {
-  //     keywords: ["Invoice", "Total"],
-  //     schema:   [{ name: "Amount", type: "number" }],
-  //     testInfo, writeReport: true,
-  //   });
-  //   expect(result.valid).toBe(true);
-  //   expect(result.columnErrors).toHaveLength(0);
   // ==========================================================================
   static async verifyExcel(
     filePath: string,
-    options?: { keywords?: string[]; schema?: ColumnSchema[]; sheetName?: string; testInfo?: any; writeReport?: boolean; }
+    options?: {
+      keywords?:    string[];
+      schema?:      ColumnSchema[];
+      sheetName?:   string;
+      testInfo?:    any;
+      writeReport?: boolean;
+    }
   ): Promise<VerifyResult> {
     const base = this.baseVerify(filePath, [".xlsx", ".xls"]);
     if (!base.valid) return base;
@@ -200,15 +227,19 @@ export class FileUtils {
     try {
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.readFile(filePath);
-      const sheet = options?.sheetName ? workbook.getWorksheet(options.sheetName) : workbook.worksheets[0];
+      const sheet = options?.sheetName
+        ? workbook.getWorksheet(options.sheetName)
+        : workbook.worksheets[0];
       if (!sheet) return this.fail(filePath, `Sheet not found: ${options?.sheetName}`);
 
       const headers: string[] = [];
-      const rows: any[] = [];
+      const rows: any[]       = [];
 
       sheet.eachRow((row, rowIndex) => {
         if (rowIndex === 1) {
-          row.eachCell((cell, colIndex) => { headers[colIndex] = String(cell.value ?? `col${colIndex}`); });
+          row.eachCell((cell, colIndex) => {
+            headers[colIndex] = String(cell.value ?? `col${colIndex}`);
+          });
           return;
         }
         const rowData: Record<string, any> = {};
@@ -216,14 +247,13 @@ export class FileUtils {
         rows.push(rowData);
       });
 
-      const allText = [...headers, ...rows.flatMap(r => Object.values(r).map(v => String(v ?? "")))].join(" ");
+      const allText      = [...headers, ...rows.flatMap(r => Object.values(r).map(v => String(v ?? "")))].join(" ");
       const missingWords = this.findMissing(options?.keywords, allText);
       const columnErrors = this.validateSchema(rows, options?.schema);
-      const result = this.buildResult(filePath, ".xlsx", true, missingWords, columnErrors, options?.testInfo);
+      const result       = this.buildResult(filePath, ".xlsx", true, missingWords, columnErrors, options?.testInfo);
       result.rowCount = rows.length;
-      result.content = rows;
+      result.content  = rows;
 
-      // ── Rich logger ───────────────────────────────────────────────────────
       logHeader("EXCEL VERIFICATION", path.basename(filePath));
       logger.info(`File Name  : ${result.fileName}`);
       logger.info(`File Size  : ${result.fileSize}`);
@@ -232,7 +262,6 @@ export class FileUtils {
       logger.info(`Columns    : ${headers.filter(Boolean).join(", ")}`);
       logger.info(SEP);
 
-      // Keywords
       const keywords = options?.keywords ?? [];
       if (keywords.length > 0) {
         keywords.forEach((kw, idx) => {
@@ -245,7 +274,6 @@ export class FileUtils {
         });
       }
 
-      // Column schema
       if (options?.schema && options.schema.length > 0) {
         logger.info(SEP);
         logger.info("COLUMN TYPE VALIDATION");
@@ -264,18 +292,15 @@ export class FileUtils {
         });
       }
 
-      // Summary
       logger.info(SEP);
-      const kwPass = missingWords.length === 0;
+      const kwPass  = missingWords.length === 0;
       const colPass = columnErrors.length === 0;
       if (kwPass && colPass) {
-        logFooterPass(
-          `RESULT : PASS   |  Rows: ${rows.length}  |  Keywords: ${keywords.length}/${keywords.length}  |  Columns: valid`
-        );
+        logFooterPass(`RESULT : PASS   |  Rows: ${rows.length}  |  Keywords: ${keywords.length}/${keywords.length}  |  Columns: valid`);
       } else {
         logFooterFail(
           `RESULT : FAIL   |  ` +
-          (!kwPass ? `Missing keywords: ${missingWords.join(", ")}  |  ` : "") +
+          (!kwPass  ? `Missing keywords: ${missingWords.join(", ")}  |  ` : "") +
           (!colPass ? `Column errors: ${columnErrors.length}` : "")
         );
       }
@@ -290,14 +315,6 @@ export class FileUtils {
 
   // ==========================================================================
   // 3. verifyPdf
-  // --------------------------------------------------------------------------
-  // EXAMPLE:
-  //   const result = await FileUtils.verifyPdf("invoice.pdf", {
-  //     keywords: ["Invoice No", "Total Amount"],
-  //     testInfo, writeReport: true,
-  //   });
-  //   expect(result.pageCount).toBeGreaterThan(0);
-  //   expect(result.containsAll).toBe(true);
   // ==========================================================================
   static async verifyPdf(
     filePath: string,
@@ -309,17 +326,16 @@ export class FileUtils {
     logger.step(`Verify PDF → ${path.basename(filePath)}`);
 
     try {
-      const pdfParse = require("pdf-parse");
-      const data = await pdfParse(fs.readFileSync(filePath));
-      const text = data.text?.trim() ?? "";
+      const pdfParse  = require("pdf-parse");
+      const data      = await pdfParse(fs.readFileSync(filePath));
+      const text      = data.text?.trim() ?? "";
       const pageCount = data.numpages ?? 0;
 
       const missingWords = this.findMissing(options?.keywords, text);
-      const result = this.buildResult(filePath, ".pdf", true, missingWords, [], options?.testInfo);
-      result.pageCount = pageCount;
-      result.text = text;
+      const result       = this.buildResult(filePath, ".pdf", true, missingWords, [], options?.testInfo);
+      result.pageCount   = pageCount;
+      result.text        = text;
 
-      // ── Rich logger ───────────────────────────────────────────────────────
       const keywords = options?.keywords ?? [];
       logHeader("PDF VERIFICATION", path.basename(filePath));
       logger.info(`File Name  : ${result.fileName}`);
@@ -330,8 +346,8 @@ export class FileUtils {
 
       let passed = 0, failed = 0;
       keywords.forEach((kw, idx) => {
-        const found = text.toLowerCase().includes(kw.toLowerCase());
-        const kwIdx = found ? text.toLowerCase().indexOf(kw.toLowerCase()) : -1;
+        const found   = text.toLowerCase().includes(kw.toLowerCase());
+        const kwIdx   = found ? text.toLowerCase().indexOf(kw.toLowerCase()) : -1;
         const preview = found
           ? text.substring(Math.max(0, kwIdx - 30), Math.min(text.length, kwIdx + kw.length + 30)).replace(/\n/g, " ")
           : "";
@@ -354,10 +370,10 @@ export class FileUtils {
       if (options?.writeReport && options?.testInfo) {
         await this.writeExcelAuto(options.testInfo,
           keywords.map(kw => ({
-            Keyword: kw,
+            Keyword:  kw,
             Expected: kw,
-            Actual: text.toLowerCase().includes(kw.toLowerCase()) ? kw : "NOT FOUND",
-            Result: text.toLowerCase().includes(kw.toLowerCase()) ? "PASS" : "FAIL",
+            Actual:   text.toLowerCase().includes(kw.toLowerCase()) ? kw : "NOT FOUND",
+            Result:   text.toLowerCase().includes(kw.toLowerCase()) ? "PASS" : "FAIL",
           }))
         );
       }
@@ -372,13 +388,6 @@ export class FileUtils {
 
   // ==========================================================================
   // 4. verifyDocx
-  // --------------------------------------------------------------------------
-  // EXAMPLE:
-  //   const result = await FileUtils.verifyDocx("contract.docx", {
-  //     keywords: ["Agreement", "Signed By"],
-  //     testInfo, writeReport: true,
-  //   });
-  //   expect(result.containsAll).toBe(true);
   // ==========================================================================
   static async verifyDocx(
     filePath: string,
@@ -391,13 +400,12 @@ export class FileUtils {
 
     try {
       const mammoth = require("mammoth");
-      const res = await mammoth.extractRawText({ path: filePath });
-      const text = res.value?.trim() ?? "";
+      const res     = await mammoth.extractRawText({ path: filePath });
+      const text    = res.value?.trim() ?? "";
       const missingWords = this.findMissing(options?.keywords, text);
-      const result = this.buildResult(filePath, ".docx", true, missingWords, [], options?.testInfo);
+      const result       = this.buildResult(filePath, ".docx", true, missingWords, [], options?.testInfo);
       result.text = text;
 
-      // ── Rich logger ───────────────────────────────────────────────────────
       const keywords = options?.keywords ?? [];
       logHeader("DOCX VERIFICATION", path.basename(filePath));
       logger.info(`File Name  : ${result.fileName}`);
@@ -408,8 +416,8 @@ export class FileUtils {
 
       let passed = 0, failed = 0;
       keywords.forEach((kw, idx) => {
-        const found = text.toLowerCase().includes(kw.toLowerCase());
-        const kwIdx = found ? text.toLowerCase().indexOf(kw.toLowerCase()) : -1;
+        const found   = text.toLowerCase().includes(kw.toLowerCase());
+        const kwIdx   = found ? text.toLowerCase().indexOf(kw.toLowerCase()) : -1;
         const preview = found
           ? text.substring(Math.max(0, kwIdx - 30), Math.min(text.length, kwIdx + kw.length + 30)).replace(/\n/g, " ")
           : "";
@@ -432,10 +440,10 @@ export class FileUtils {
       if (options?.writeReport && options?.testInfo) {
         await this.writeExcelAuto(options.testInfo,
           keywords.map(kw => ({
-            Keyword: kw,
+            Keyword:  kw,
             Expected: kw,
-            Actual: text.toLowerCase().includes(kw.toLowerCase()) ? kw : "NOT FOUND",
-            Result: text.toLowerCase().includes(kw.toLowerCase()) ? "PASS" : "FAIL",
+            Actual:   text.toLowerCase().includes(kw.toLowerCase()) ? kw : "NOT FOUND",
+            Result:   text.toLowerCase().includes(kw.toLowerCase()) ? "PASS" : "FAIL",
           }))
         );
       }
@@ -450,15 +458,6 @@ export class FileUtils {
 
   // ==========================================================================
   // 5. verifyCsv
-  // --------------------------------------------------------------------------
-  // EXAMPLE:
-  //   const result = await FileUtils.verifyCsv("users.csv", {
-  //     keywords: ["admin@test.com"],
-  //     schema:   [{ name: "email", type: "email" }, { name: "age", type: "number" }],
-  //     testInfo, writeReport: true,
-  //   });
-  //   expect(result.rowCount).toBeGreaterThan(0);
-  //   expect(result.columnValid).toBe(true);
   // ==========================================================================
   static async verifyCsv(
     filePath: string,
@@ -470,17 +469,16 @@ export class FileUtils {
     logger.step(`Verify CSV → ${path.basename(filePath)}`);
 
     try {
-      const rows = parse(fs.readFileSync(filePath, "utf-8"), { columns: true, skip_empty_lines: true, trim: true }) as any[];
-      const allText = rows.flatMap(r => Object.values(r).map(v => String(v ?? ""))).join(" ");
+      const rows         = parse(fs.readFileSync(filePath, "utf-8"), { columns: true, skip_empty_lines: true, trim: true }) as any[];
+      const allText      = rows.flatMap(r => Object.values(r).map(v => String(v ?? ""))).join(" ");
       const missingWords = this.findMissing(options?.keywords, allText);
       const columnErrors = this.validateSchema(rows, options?.schema);
-      const result = this.buildResult(filePath, ".csv", true, missingWords, columnErrors, options?.testInfo);
-      result.rowCount = rows.length;
-      result.content = rows;
+      const result       = this.buildResult(filePath, ".csv", true, missingWords, columnErrors, options?.testInfo);
+      result.rowCount    = rows.length;
+      result.content     = rows;
 
-      // ── Rich logger ───────────────────────────────────────────────────────
       const keywords = options?.keywords ?? [];
-      const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+      const headers  = rows.length > 0 ? Object.keys(rows[0]) : [];
       logHeader("CSV VERIFICATION", path.basename(filePath));
       logger.info(`File Name  : ${result.fileName}`);
       logger.info(`File Size  : ${result.fileSize}`);
@@ -488,7 +486,6 @@ export class FileUtils {
       logger.info(`Columns    : ${headers.join(", ")}`);
       logger.info(SEP);
 
-      // Keywords
       let kwPassed = 0, kwFailed = 0;
       keywords.forEach((kw, idx) => {
         const found = allText.toLowerCase().includes(kw.toLowerCase());
@@ -500,14 +497,12 @@ export class FileUtils {
         found ? kwPassed++ : kwFailed++;
       });
 
-      // Column schema
       if (options?.schema && options.schema.length > 0) {
         logger.info(SEP);
         logger.info("COLUMN TYPE VALIDATION");
         logger.info(SEP);
         options.schema.forEach((col, idx) => {
           const colErrors = columnErrors.filter(e => e.column === col.name);
-          // sample actual value from first row
           const sampleVal = rows.length > 0 ? String(rows[0][col.name] ?? "(empty)") : "(no rows)";
           logger.info(`${String(idx + 1).padStart(2, "0")}. Column : "${col.name}"`);
           logger.info(`    Expected Type : ${col.type}`);
@@ -529,7 +524,7 @@ export class FileUtils {
       } else {
         logFooterFail(
           `RESULT : FAIL   |  ` +
-          (kwFailed > 0 ? `Missing keywords: ${missingWords.join(", ")}  |  ` : "") +
+          (kwFailed > 0        ? `Missing keywords: ${missingWords.join(", ")}  |  ` : "") +
           (columnErrors.length > 0 ? `Column errors: ${columnErrors.length}` : "")
         );
       }
@@ -544,13 +539,6 @@ export class FileUtils {
 
   // ==========================================================================
   // 6. verifyTxt
-  // --------------------------------------------------------------------------
-  // EXAMPLE:
-  //   const result = await FileUtils.verifyTxt("output.txt", {
-  //     keywords: ["SUCCESS", "Order processed"],
-  //     testInfo,
-  //   });
-  //   expect(result.containsAll).toBe(true);
   // ==========================================================================
   static async verifyTxt(
     filePath: string,
@@ -562,14 +550,13 @@ export class FileUtils {
     logger.step(`Verify TXT → ${path.basename(filePath)}`);
 
     try {
-      const text = fs.readFileSync(filePath, "utf-8").trim();
+      const text         = fs.readFileSync(filePath, "utf-8").trim();
       const missingWords = this.findMissing(options?.keywords, text);
-      const result = this.buildResult(filePath, ".txt", true, missingWords, [], options?.testInfo);
-      result.text = text;
+      const result       = this.buildResult(filePath, ".txt", true, missingWords, [], options?.testInfo);
+      result.text        = text;
 
-      // ── Rich logger ───────────────────────────────────────────────────────
       const keywords = options?.keywords ?? [];
-      const lines = text.split("\n").filter(Boolean);
+      const lines    = text.split("\n").filter(Boolean);
       logHeader("TXT VERIFICATION", path.basename(filePath));
       logger.info(`File Name  : ${result.fileName}`);
       logger.info(`File Size  : ${result.fileSize}`);
@@ -579,10 +566,8 @@ export class FileUtils {
 
       let passed = 0, failed = 0;
       keywords.forEach((kw, idx) => {
-        const found = text.toLowerCase().includes(kw.toLowerCase());
-        const lineNo = found
-          ? lines.findIndex(l => l.toLowerCase().includes(kw.toLowerCase())) + 1
-          : -1;
+        const found       = text.toLowerCase().includes(kw.toLowerCase());
+        const lineNo      = found ? lines.findIndex(l => l.toLowerCase().includes(kw.toLowerCase())) + 1 : -1;
         const matchedLine = lineNo > 0 ? lines[lineNo - 1].trim() : "";
         logger.info(`${String(idx + 1).padStart(2, "0")}. Keyword Check`);
         logger.info(`    Expected : "${kw}"`);
@@ -606,10 +591,10 @@ export class FileUtils {
       if (options?.writeReport && options?.testInfo) {
         await this.writeExcelAuto(options.testInfo,
           keywords.map(kw => ({
-            Keyword: kw,
+            Keyword:  kw,
             Expected: kw,
-            Actual: text.toLowerCase().includes(kw.toLowerCase()) ? kw : "NOT FOUND",
-            Result: text.toLowerCase().includes(kw.toLowerCase()) ? "PASS" : "FAIL",
+            Actual:   text.toLowerCase().includes(kw.toLowerCase()) ? kw : "NOT FOUND",
+            Result:   text.toLowerCase().includes(kw.toLowerCase()) ? "PASS" : "FAIL",
           }))
         );
       }
@@ -622,19 +607,7 @@ export class FileUtils {
   }
 
   // ==========================================================================
-  // 7. verifyPdfContent — Indian language bill/invoice PDF verification
-  // --------------------------------------------------------------------------
-  // EXAMPLE:
-  //   const result = await FileUtils.verifyPdfContent(dl.filePath, {
-  //     fields: [
-  //       { label: "Total Amount",  amount: "2400.00", currency: "₹" },
-  //       { label: "Status",        text: "PAID",      match: "exact"    },
-  //       { label: "Customer Name", text: "Raj",       match: "contains" },
-  //       { label: "Invoice No",    text: "INV-\\d+",  match: "regex"    },
-  //     ],
-  //     testInfo, writeReport: true,
-  //   });
-  //   expect(result.allFieldsFound).toBe(true);
+  // 7. verifyPdfContent
   // ==========================================================================
   static async verifyPdfContent(
     filePath: string,
@@ -651,29 +624,26 @@ export class FileUtils {
     let text = "", pageCount = 0;
     try {
       const pdfParse = require("pdf-parse");
-      const data = await pdfParse(fs.readFileSync(filePath));
-      text = data.text ?? "";
+      const data     = await pdfParse(fs.readFileSync(filePath));
+      text      = data.text ?? "";
       pageCount = data.numpages ?? 0;
     } catch (err: any) {
       if (err.code === "MODULE_NOT_FOUND") throw new Error("Run: npm install pdf-parse");
       return this.buildBillFail(filePath, `PDF read failed: ${err.message}`);
     }
 
-    const lines = text.split("\n").map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+    const lines    = text.split("\n").map((l: string) => l.trim()).filter((l: string) => l.length > 0);
     const language = this.detectScript(text);
     const fileSize = this.formatSize(fs.statSync(filePath).size);
 
-    // ── Verify each field ─────────────────────────────────────────────────────
     const fieldResults: BillFieldResult[] = options.fields.map(field => {
       if (field.amount !== undefined) return this.verifyBillAmount(field, lines, text);
-      if (field.text !== undefined) return this.verifyBillText(field, lines);
+      if (field.text   !== undefined) return this.verifyBillText(field, lines);
       logger.warn(`Field "${field.label}" has neither amount nor text — skipping`);
       return this.buildBillFieldFail(field, "no amount or text specified");
     });
 
     const allFieldsFound = fieldResults.every(f => f.found);
-
-    // ── Rich logger ───────────────────────────────────────────────────────────
     const pad = (s: string, n: number) => s.padEnd(n).substring(0, n);
 
     logHeader("PDF BILL VERIFICATION", path.basename(filePath));
@@ -686,9 +656,8 @@ export class FileUtils {
 
     fieldResults.forEach((f, idx) => {
       const expected = f.amount ?? f.text ?? "";
-      const actual = f.matchedValue || "NOT FOUND";
+      const actual   = f.matchedValue || "NOT FOUND";
       const matchHow = f.fieldType === "amount" ? "amount" : `${f.match ?? "contains"}`;
-
       logger.info(`${String(idx + 1).padStart(2, "0")}. ${pad(f.label, 20)}  ${f.found ? " PASS" : " FAIL"}`);
       logger.info(`    Expected  : "${expected}"  [${matchHow}]`);
       logger.info(`    Actual    : "${actual}"`);
@@ -705,19 +674,15 @@ export class FileUtils {
 
     logger.info(SEP);
     if (allFieldsFound) {
-      const hi = fieldResults.filter(f => f.confidence === "high").length;
+      const hi  = fieldResults.filter(f => f.confidence === "high").length;
       const med = fieldResults.filter(f => f.confidence === "medium").length;
       const low = fieldResults.filter(f => f.confidence === "low").length;
-      logFooterPass(
-        `RESULT : ALL ${fieldResults.length} FIELD(S) PASSED   |  high: ${hi}  medium: ${med}  low: ${low}`
-      );
+      logFooterPass(`RESULT : ALL ${fieldResults.length} FIELD(S) PASSED   |  high: ${hi}  medium: ${med}  low: ${low}`);
     } else {
-      const passed = fieldResults.filter(f => f.found).length;
-      const failed = fieldResults.filter(f => !f.found).length;
+      const passed  = fieldResults.filter(f => f.found).length;
+      const failed  = fieldResults.filter(f => !f.found).length;
       const missing = fieldResults.filter(f => !f.found).map(f => `"${f.label}"`);
-      logFooterFail(
-        `RESULT : ${passed} PASSED / ${failed} FAILED   |  Missing: ${missing.join(", ")}`
-      );
+      logFooterFail(`RESULT : ${passed} PASSED / ${failed} FAILED   |  Missing: ${missing.join(", ")}`);
     }
 
     const result: PdfBillResult = {
@@ -735,32 +700,28 @@ export class FileUtils {
 
   // ==========================================================================
   // 8. verifyDownloadInFolder
-  // --------------------------------------------------------------------------
-  // EXAMPLE:
-  //   const result = await FileUtils.verifyDownloadInFolder(
-  //     "C:/Users/user/Downloads", ".xlsx",
-  //     { waitMs: 8000, fileNameContains: "report" }
-  //   );
-  //   expect(result.downloaded).toBe(true);
   // ==========================================================================
   static async verifyDownloadInFolder(
-    folderPath: string, expectedExtension: string,
+    folderPath:        string,
+    expectedExtension: string,
     options?: { waitMs?: number; fileNameContains?: string }
   ): Promise<{ fileName: string; filePath: string; fileSize: string; downloaded: boolean }> {
-    const waitMs = options?.waitMs ?? 5000;
+    const waitMs   = options?.waitMs ?? 5000;
     const deadline = Date.now() + waitMs;
     logger.step(`Check folder → ${expectedExtension}`);
 
     while (Date.now() < deadline) {
       if (!fs.existsSync(folderPath)) { await this.sleep(500); continue; }
       const files = fs.readdirSync(folderPath)
-        .filter(f => path.extname(f).toLowerCase() === expectedExtension.toLowerCase()
-          && (!options?.fileNameContains || f.toLowerCase().includes(options.fileNameContains.toLowerCase())))
+        .filter(f =>
+          path.extname(f).toLowerCase() === expectedExtension.toLowerCase() &&
+          (!options?.fileNameContains || f.toLowerCase().includes(options.fileNameContains.toLowerCase()))
+        )
         .map(f => ({ name: f, time: fs.statSync(path.join(folderPath, f)).mtime.getTime() }))
         .sort((a, b) => b.time - a.time);
 
       if (files.length > 0) {
-        const fp = path.join(folderPath, files[0].name);
+        const fp   = path.join(folderPath, files[0].name);
         const size = this.formatSize(fs.statSync(fp).size);
         logger.pass(`Found → ${files[0].name} | ${size}`);
         return { fileName: files[0].name, filePath: fp, fileSize: size, downloaded: true };
@@ -782,7 +743,7 @@ export class FileUtils {
     const sheet = sheetName ? workbook.getWorksheet(sheetName) : workbook.worksheets[0];
     if (!sheet) throw new Error(`Sheet not found: ${sheetName}`);
     const headers: string[] = [];
-    const rows: any[] = [];
+    const rows:    any[]    = [];
     sheet.eachRow((row, rowIndex) => {
       if (rowIndex === 1) {
         row.eachCell((cell, colIndex) => { headers[colIndex] = String(cell.value ?? `col${colIndex}`); });
@@ -793,6 +754,53 @@ export class FileUtils {
       rows.push(rowData);
     });
     return rows;
+  }
+
+  // ==========================================================================
+  // 9a. findRowByAnyValue
+  // ==========================================================================
+  static findRowByAnyValue(rows: any[], searchValue: string): Record<string, any> | undefined {
+    return rows.find(row =>
+      Object.values(row).some(v => String(v ?? '').trim() === searchValue)
+    );
+  }
+
+  // ==========================================================================
+  // 9b. verifyRowContainsAll
+  // ==========================================================================
+  static verifyRowContainsAll(
+    row:            Record<string, any>,
+    expectedValues: string[],
+    log?:           { info: (msg: string) => void }
+  ): void {
+    const rowText = Object.values(row).map(v => String(v ?? '')).join(' ');
+    if (log) log.info(`Row text (first 150 chars): ${rowText.substring(0, 150)}`);
+    for (const expected of expectedValues) {
+      if (!rowText.includes(expected)) {
+        throw new Error(`Expected value "${expected}" not found in row.\nRow text: ${rowText.substring(0, 300)}`);
+      }
+    }
+  }
+
+  // ==========================================================================
+  // 9c. readExcelAllText
+  // ==========================================================================
+  static async readExcelAllText(filePath: string, sheetName?: string): Promise<string> {
+    if (!fs.existsSync(filePath)) throw new Error(`Excel not found → ${filePath}`);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    const sheet = sheetName ? workbook.getWorksheet(sheetName) : workbook.worksheets[0];
+    if (!sheet) throw new Error(`Sheet not found: ${sheetName}`);
+    const allValues: string[] = [];
+    sheet.eachRow(row => {
+      row.eachCell(cell => {
+        const val = this.getCellValue(cell);
+        if (val !== null && val !== undefined && String(val).trim() !== '') {
+          allValues.push(String(val).trim());
+        }
+      });
+    });
+    return allValues.join(' ');
   }
 
   // ==========================================================================
@@ -826,10 +834,10 @@ export class FileUtils {
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet(sheetName);
+    const sheet    = workbook.addWorksheet(sheetName);
     if (data.length === 0) { await workbook.xlsx.writeFile(filePath); return; }
     sheet.columns = Object.keys(data[0]).map(key => ({ header: key, key, width: 20 }));
-    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).font      = { bold: true };
     sheet.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
     data.forEach(row => sheet.addRow(row));
     await workbook.xlsx.writeFile(filePath);
@@ -839,9 +847,9 @@ export class FileUtils {
   // 14. writeExcelAuto
   // ==========================================================================
   static async writeExcelAuto(testInfo: any, data: any[], folder = "test-results/excel"): Promise<string> {
-    const testName = (testInfo?.title ?? "test").replace(/\s+/g, "_");
+    const testName  = (testInfo?.title ?? "test").replace(/\s+/g, "_");
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const dir = path.join(process.cwd(), folder);
+    const dir       = path.join(process.cwd(), folder);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const fullPath = path.join(dir, `Excel_${testName}_${timestamp}.xlsx`);
     await this.writeExcel(fullPath, data);
@@ -883,8 +891,376 @@ export class FileUtils {
   static fileExists(filePath: string): boolean { return fs.existsSync(filePath); }
 
   // ==========================================================================
-  // PRIVATE — bill amount verification
+  // 19. verifyMemberListAttachmentExcel
   // ==========================================================================
+  static async verifyMemberListAttachmentExcel(
+    filePath:                  string,
+    capturedClientName:        string,
+    capturedMedicalPolicyName: string,
+    runtime: { lastName: string; employeeNumber: string; email: string; nationalIdNumber: string }
+  ): Promise<void> {
+    const XlsxPopulate = require('xlsx-populate').default || require('xlsx-populate');
+    const workbook     = await XlsxPopulate.fromFileAsync(filePath);
+    const worksheet    = workbook.sheet('Membership List');
+
+    const clientNameCell = String(worksheet.cell(5, 2).value() ?? '').trim();
+    const policyNameCell = String(worksheet.cell(7, 2).value() ?? '').trim();
+    logger.info(`MemberList — Client Name (Row5,Col2): "${clientNameCell}"`);
+    if (!clientNameCell.includes(capturedClientName))
+      throw new Error(`Client Name mismatch. Expected: "${capturedClientName}" | Actual: "${clientNameCell}"`);
+    logger.info(`MemberList — Policy Name (Row7,Col2): "${policyNameCell}"`);
+    if (!policyNameCell.includes(capturedMedicalPolicyName))
+      throw new Error(`Policy Name mismatch. Expected: "${capturedMedicalPolicyName}" | Actual: "${policyNameCell}"`);
+
+    const HEADER_ROW = 11;
+    const DATA_ROW   = 12;
+    const MAX_COL    = 50;
+    const headerToCol: Record<string, number> = {};
+    for (let c = 1; c <= MAX_COL; c++) {
+      const hdr = worksheet.cell(HEADER_ROW, c).value();
+      if (hdr) headerToCol[String(hdr).trim()] = c;
+    }
+
+    const get = (col: string): string =>
+      String(worksheet.cell(DATA_ROW, headerToCol[col] ?? 0).value() ?? '').trim();
+
+    const fields: [string, string, string, boolean][] = [
+      ['Last Name',          get('Last Name'),          runtime.lastName,          true],
+      ['Employee No.',       get('Employee No.'),       runtime.employeeNumber,    true],
+      ['Policy',             get('Policy'),             capturedMedicalPolicyName, true],
+      ['Category',           get('Category'),           'Cat A_',                  false],
+      ['Relation',           get('Relation'),           'Principal',               true],
+      ['Marital Status',     get('Marital Status'),     'Married',                 true],
+      ['Nationality',        get('Nationality'),        'India',                   true],
+      ['National ID Number', get('National ID Number'), runtime.nationalIdNumber,  false],
+      ['Email',              get('Email'),              runtime.email,             true],
+    ];
+
+    for (const [label, actual, expected, exact] of fields) {
+      logger.info(`MemberList — ${label}: "${actual}" | Expected: "${expected}"`);
+      if (exact  && actual !== expected)       throw new Error(`${label} mismatch. Expected: "${expected}" | Actual: "${actual}"`);
+      if (!exact && !actual.includes(expected)) throw new Error(`${label} should contain "${expected}" | Actual: "${actual}"`);
+    }
+
+    logger.pass('MemberList attachment Excel — all verifications passed');
+  }
+
+  // ==========================================================================
+  // 20. verifyWorkflowLogsExcelMemberRow
+  // ==========================================================================
+  static async verifyWorkflowLogsExcelMemberRow(
+    filePath:                  string,
+    runtime:                   { lastName: string; employeeNumber: string },
+    capturedClientName:        string,
+    capturedMedicalPolicyName: string
+  ): Promise<void> {
+    const XlsxPopulate = require('xlsx-populate').default || require('xlsx-populate');
+    const workbook     = await XlsxPopulate.fromFileAsync(filePath);
+    const worksheet    = workbook.sheet('Workflow Logs Report');
+
+    const HEADER_ROW     = 8;
+    const FIRST_DATA_ROW = 9;
+    const MAX_COL        = 54;
+
+    const headerToCol: Record<string, number> = {};
+    for (let c = 1; c <= MAX_COL; c++) {
+      const hdr = worksheet.cell(HEADER_ROW, c).value();
+      if (hdr) headerToCol[String(hdr).trim()] = c;
+    }
+    logger.info(`Workflow headers mapped: ${Object.keys(headerToCol).length} columns`);
+
+    const get = (row: number, col: string): string =>
+      String(worksheet.cell(row, headerToCol[col] ?? 0).value() ?? '').trim();
+
+    let lastDataRow = FIRST_DATA_ROW;
+    for (let r = FIRST_DATA_ROW; r <= 10000; r++) {
+      if (String(worksheet.cell(r, 1).value() ?? '').trim() === '') break;
+      lastDataRow = r;
+    }
+    const totalDataRows = lastDataRow - FIRST_DATA_ROW + 1;
+    logger.info(`Workflow data rows: ${totalDataRows} (rows ${FIRST_DATA_ROW}–${lastDataRow})`);
+
+    let memberDataRow = -1;
+    for (let r = FIRST_DATA_ROW; r <= lastDataRow; r++) {
+      if (get(r, 'Employee Number') === runtime.employeeNumber) { memberDataRow = r; break; }
+    }
+
+    logger.info(`Searching for Employee Number: ${runtime.employeeNumber} in ${totalDataRows} rows`);
+    if (memberDataRow < 0)
+      throw new Error(`Employee Number "${runtime.employeeNumber}" not found in Workflow Logs (rows ${FIRST_DATA_ROW}–${lastDataRow})`);
+
+    const fields: [string, string, string, boolean][] = [
+      ['Member Name',  get(memberDataRow, 'Member Name'),    runtime.lastName,          false],
+      ['Employee No',  get(memberDataRow, 'Employee Number'), runtime.employeeNumber,   true],
+      ['Company',      get(memberDataRow, 'Company'),         capturedClientName,        true],
+      ['Policy',       get(memberDataRow, 'Policy'),          capturedMedicalPolicyName, true],
+      ['Category',     get(memberDataRow, 'Category'),        'Cat A_',                 false],
+      ['Relation',     get(memberDataRow, 'Relation'),        'Principal',              true],
+      ['Request Type', get(memberDataRow, 'Request Type'),    'Member Addition',        true],
+      ['Nationality',  get(memberDataRow, 'Nationality'),     'India',                  true],
+    ];
+
+    logger.info(`Workflow — Row ${memberDataRow} found`);
+    for (const [label, actual, expected, exact] of fields) {
+      logger.info(`  ${label.padEnd(14)}: "${actual}" | Expected: "${expected}"`);
+      if (exact  && actual !== expected)        throw new Error(`${label} mismatch. Expected: "${expected}" | Actual: "${actual}"`);
+      if (!exact && !actual.includes(expected)) throw new Error(`${label} should contain "${expected}" | Actual: "${actual}"`);
+    }
+
+    logger.pass('Workflow Logs Excel — all column verifications passed');
+  }
+
+  // ==========================================================================
+  // 21. verifyConsolidatedMembershipExcelMemberRow
+  // ==========================================================================
+  static async verifyConsolidatedMembershipExcelMemberRow(
+    filePath:                  string,
+    runtime:                   { firstName: string; lastName: string; employeeNumber: string; email: string; nationalIdNumber: string },
+    capturedMedicalPolicyName: string
+  ): Promise<void> {
+    const XlsxPopulate = require('xlsx-populate').default || require('xlsx-populate');
+    const workbook     = await XlsxPopulate.fromFileAsync(filePath);
+    const worksheet    = workbook.sheet('Membership List');
+
+    const HEADER_ROW     = 6;
+    const FIRST_DATA_ROW = 7;
+    const MAX_COL        = 57;
+
+    const headerToCol: Record<string, number> = {};
+    for (let c = 1; c <= MAX_COL; c++) {
+      const hdr = worksheet.cell(HEADER_ROW, c).value();
+      if (hdr) headerToCol[String(hdr).trim()] = c;
+    }
+
+    const get = (row: number, col: string): string =>
+      String(worksheet.cell(row, headerToCol[col] ?? 0).value() ?? '').trim();
+
+    let lastDataRow = FIRST_DATA_ROW;
+    for (let r = FIRST_DATA_ROW; r <= 10000; r++) {
+      if (String(worksheet.cell(r, 1).value() ?? '').trim() === '') break;
+      lastDataRow = r;
+    }
+    const totalRows = lastDataRow - FIRST_DATA_ROW + 1;
+    logger.info(`Consolidated data rows: ${totalRows} (rows ${FIRST_DATA_ROW}–${lastDataRow})`);
+
+    let memberDataRow = -1;
+    for (let r = FIRST_DATA_ROW; r <= lastDataRow; r++) {
+      if (get(r, 'Employee Number') === runtime.employeeNumber) { memberDataRow = r; break; }
+    }
+
+    logger.info(`Searching for Employee Number: ${runtime.employeeNumber} in ${totalRows} rows`);
+    if (memberDataRow < 0)
+      throw new Error(`Employee Number "${runtime.employeeNumber}" not found in Consolidated (rows ${FIRST_DATA_ROW}–${lastDataRow})`);
+
+    const benefitNetId = get(memberDataRow, 'BenefitNet ID');
+    logger.info(`Consolidated — Row ${memberDataRow} | BenefitNet ID: ${benefitNetId}`);
+
+    const fields: [string, string, string, boolean][] = [
+      ['First Name',            get(memberDataRow, 'First Name'),            runtime.firstName,         true],
+      ['Last Name',             get(memberDataRow, 'Last Name'),             runtime.lastName,          true],
+      ['Employee Number',       get(memberDataRow, 'Employee Number'),       runtime.employeeNumber,    true],
+      ['Email',                 get(memberDataRow, 'Email'),                 runtime.email,             true],
+      ['Nationality',           get(memberDataRow, 'Nationality'),           'India',                   true],
+      ['Marital Status',        get(memberDataRow, 'Marital Status'),        'Married',                 true],
+      ['Relation',              get(memberDataRow, 'Relation'),              'Principal',               true],
+      ['Policy',                get(memberDataRow, 'Policy'),                capturedMedicalPolicyName, true],
+      ['Category',              get(memberDataRow, 'Category'),              'Cat A_',                  false],
+      ['Country of Residence',  get(memberDataRow, 'Country of Residence'), 'United Arab Emirates',    true],
+      ['Member Profile Status', get(memberDataRow, 'Member Profile Status'),'Pending Addition',        true],
+      ['National ID Number',    get(memberDataRow, 'National ID Number'),    runtime.nationalIdNumber,  false],
+    ];
+
+    for (const [label, actual, expected, exact] of fields) {
+      logger.info(`  ${label.padEnd(22)}: "${actual}" | Expected: "${expected}"`);
+      if (exact  && actual !== expected)        throw new Error(`${label} mismatch. Expected: "${expected}" | Actual: "${actual}"`);
+      if (!exact && !actual.includes(expected)) throw new Error(`${label} should contain "${expected}" | Actual: "${actual}"`);
+    }
+
+    logger.pass('Consolidated Membership Excel — all column verifications passed');
+  }
+
+  // ==========================================================================
+  // 25. setTestContext
+  // --------------------------------------------------------------------------
+  // Call once at the start of each test.
+  // All page classes that call getTcDownloadDir() will automatically
+  // save files under test-results/downloads/<TC_ID>/
+  //
+  // Usage in spec:
+  //   FileUtils.setTestContext("REG_TS01_TC02");
+  // ==========================================================================
+  static setTestContext(tcId: string): void {
+    FileUtils.currentTcId = tcId;
+    logger.info(`FileUtils: test context set → "${tcId}"`);
+  }
+
+  // ==========================================================================
+  // 26. getTcDownloadDir
+  // --------------------------------------------------------------------------
+  // Returns TC-scoped download folder and creates it if missing.
+  // Falls back to base downloads/ when no TC_ID is set.
+  //
+  // Usage in page class download method:
+  //   const dir      = FileUtils.getTcDownloadDir();
+  //   const filePath = path.join(dir, uniqueFileName);
+  // ==========================================================================
+  static getTcDownloadDir(): string {
+    const base = path.join(process.cwd(), "test-results", "downloads");
+    const dir  = FileUtils.currentTcId
+      ? path.join(base, FileUtils.currentTcId)
+      : base;
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  // ==========================================================================
+  // 27. clearTestContext
+  // --------------------------------------------------------------------------
+  // Resets TC_ID — call in test.afterAll()
+  //
+  // Usage:
+  //   FileUtils.clearTestContext();
+  // ==========================================================================
+  static clearTestContext(): void {
+    logger.info(`FileUtils: test context cleared (was "${FileUtils.currentTcId}")`);
+    FileUtils.currentTcId = '';
+  }
+
+  // ==========================================================================
+  // 28. captureExcelStep
+  // --------------------------------------------------------------------------
+  // Saves a numbered labeled copy of an Excel file and logs a diff against
+  // the previous captured state for the same TC_ID.
+  //
+  // Usage in test case — call after any Excel action:
+  //   await FileUtils.captureExcelStep(filePath, "Round1_CensusFill",       TC_ID);
+  //   await FileUtils.captureExcelStep(filePath, "Round1_ValidationFailed",  TC_ID);
+  //   await FileUtils.captureExcelStep(filePath, "Round2_CensusFill",        TC_ID);
+  //
+  // Files saved:
+  //   test-results/downloads/REG_TS01_TC02/steps/
+  //   ├── 01_Round1_CensusFill_14-12-24.xlsx
+  //   ├── 02_Round1_ValidationFailed_14-13-06.xlsx
+  //   └── 03_Round2_CensusFill_14-13-45.xlsx
+  // ==========================================================================
+  static async captureExcelStep(
+    filePath:   string,
+    stepLabel:  string,
+    tcId:       string,
+    sheetName?: string
+  ): Promise<void> {
+
+    // ── 1. Build steps folder ────────────────────────────────────────────────
+    const stepsDir = path.join(
+      process.cwd(), "test-results", "downloads", tcId, "steps"
+    );
+    if (!fs.existsSync(stepsDir)) fs.mkdirSync(stepsDir, { recursive: true });
+
+    // ── 2. Increment step counter ────────────────────────────────────────────
+    const count = (FileUtils.stepCounter.get(tcId) ?? 0) + 1;
+    FileUtils.stepCounter.set(tcId, count);
+
+    // ── 3. Save copy using ORIGINAL file name + step number prefix ───────────
+    //   Original: ImportMembers_19-6-2026--15-26-36.xlsx
+    //   Saved as: 01_ImportMembers_19-6-2026--15-26-36.xlsx
+    //   stepLabel is used ONLY in the console diff log — not in the file name
+    const originalFileName = path.basename(filePath);
+    const copyName         = `${String(count).padStart(2, '0')}_${originalFileName}`;
+    const copyPath         = path.join(stepsDir, copyName);
+    fs.copyFileSync(filePath, copyPath);
+    logger.info(`[ExcelStep ${count}] "${stepLabel}" → saved: ${copyName}`);
+
+    // ── 4. Read current rows ─────────────────────────────────────────────────
+    let currentRows: Array<Record<string, unknown>> = [];
+    try {
+      const raw   = await FileUtils.readExcel(filePath, sheetName);
+      currentRows = raw as Array<Record<string, unknown>>;
+    } catch (error) {
+      logger.warn(
+        `[ExcelStep ${count}] Could not read rows for diff — ` +
+        `${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+
+    // ── 5. Diff against previous snapshot ───────────────────────────────────
+    const history: ExcelStepSnapshot[] = FileUtils.stepHistory.get(tcId) ?? [];
+
+    if (history.length === 0) {
+      logger.info(
+        `[ExcelStep ${count}] "${stepLabel}" — initial snapshot | ` +
+        `${currentRows.length} data row(s)`
+      );
+    } else {
+      const prev     = history[history.length - 1];
+      const prevRows = prev.rows;
+      const divider  = '─'.repeat(72);
+
+      logger.info(`[ExcelStep ${count}] Diff: "${stepLabel}" vs "${prev.label}"`);
+      logger.info(divider);
+
+      let diffFound = false;
+      const maxRows = Math.max(prevRows.length, currentRows.length);
+
+      for (let i = 0; i < maxRows; i++) {
+        const prevRow: Record<string, unknown> = prevRows[i]    ?? {};
+        const currRow: Record<string, unknown> = currentRows[i] ?? {};
+
+        if (i >= prevRows.length) {
+          logger.info(`  Row ${i + 2} | ← NEW ROW ADDED`);
+          diffFound = true;
+          continue;
+        }
+
+        if (i >= currentRows.length) {
+          logger.info(`  Row ${i + 2} | ← ROW REMOVED`);
+          diffFound = true;
+          continue;
+        }
+
+        const allColumns = new Set<string>([
+          ...Object.keys(prevRow),
+          ...Object.keys(currRow),
+        ]);
+
+        for (const col of allColumns) {
+          const prevVal = String(prevRow[col] ?? '').trim();
+          const currVal = String(currRow[col] ?? '').trim();
+          if (prevVal === currVal) continue;
+          diffFound = true;
+          logger.info(
+            `  Row ${i + 2} | ${col.padEnd(28)}: ` +
+            `"${prevVal || '(empty)'}" → "${currVal || '(empty)'}"`
+          );
+        }
+      }
+
+      if (!diffFound) logger.info(`  No changes detected between steps`);
+      logger.info(divider);
+    }
+
+    // ── 6. Store current as latest snapshot ─────────────────────────────────
+    history.push({ label: stepLabel, rows: currentRows });
+    FileUtils.stepHistory.set(tcId, history);
+  }
+
+  // ==========================================================================
+  // 29. clearExcelStepHistory
+  // --------------------------------------------------------------------------
+  // Resets step history and counter for a TC — call in test.afterAll()
+  //
+  // Usage:
+  //   FileUtils.clearExcelStepHistory("REG_TS01_TC02");
+  // ==========================================================================
+  static clearExcelStepHistory(tcId: string): void {
+    FileUtils.stepHistory.delete(tcId);
+    FileUtils.stepCounter.delete(tcId);
+    logger.info(`FileUtils: step history cleared for "${tcId}"`);
+  }
+
+  // ==========================================================================
+  // PRIVATE — bill verification helpers
+  // ==========================================================================
+
   private static verifyBillAmount(field: BillField, lines: string[], fullText: string): BillFieldResult {
     const amount = field.amount!;
 
@@ -898,7 +1274,7 @@ export class FileUtils {
 
     for (let i = 0; i < lines.length; i++) {
       if (this.amountInLine(lines[i], amount, field.currency)) {
-        const above = lines.slice(Math.max(0, i - PROXIMITY), i);
+        const above        = lines.slice(Math.max(0, i - PROXIMITY), i);
         const hasLabelAbove = above.some(l =>
           SEPARATORS.some(s => l.trimEnd().endsWith(s)) || (!/\d/.test(l) && l.length > 2)
         );
@@ -909,9 +1285,11 @@ export class FileUtils {
     }
 
     const allAmounts = [...fullText.matchAll(MONEY_PATTERN)].map(m => m[0].trim());
-    const norm = this.normaliseAmount(amount);
-    const matched = allAmounts.find(a =>
-      this.normaliseAmount(a) === norm || this.normaliseAmount(a).includes(norm) || norm.includes(this.normaliseAmount(a))
+    const norm       = this.normaliseAmount(amount);
+    const matched    = allAmounts.find(a =>
+      this.normaliseAmount(a) === norm ||
+      this.normaliseAmount(a).includes(norm) ||
+      norm.includes(this.normaliseAmount(a))
     );
     if (matched) {
       const li = lines.findIndex(l => l.includes(matched));
@@ -927,17 +1305,14 @@ export class FileUtils {
     return this.buildBillFieldFail(field, "not found in PDF");
   }
 
-  // ==========================================================================
-  // PRIVATE — bill text verification
-  // ==========================================================================
   private static verifyBillText(field: BillField, lines: string[]): BillFieldResult {
-    const value = field.text!;
-    const matchType = field.match ?? "contains";
-    const location = field.location ?? "auto";
+    const value     = field.text!;
+    const matchType = field.match    ?? "contains";
+    const location  = field.location ?? "auto";
 
     if (location === "near-label" || location === "auto") {
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
+        const line        = lines[i];
         const isLabelLine =
           SEPARATORS.some(s => line.includes(s)) ||
           (!/\d/.test(line) && line.length > 2 && line.length < 60);
@@ -1019,11 +1394,11 @@ export class FileUtils {
 
   private static detectScript(text: string): string {
     const scripts: Record<string, RegExp> = {
-      devanagari: /[\u0900-\u097F]/, tamil: /[\u0B80-\u0BFF]/,
-      telugu: /[\u0C00-\u0C7F]/, kannada: /[\u0C80-\u0CFF]/,
-      malayalam: /[\u0D00-\u0D7F]/, bengali: /[\u0980-\u09FF]/,
-      gujarati: /[\u0A80-\u0AFF]/, punjabi: /[\u0A00-\u0A7F]/,
-      odia: /[\u0B00-\u0B7F]/,
+      devanagari: /[\u0900-\u097F]/, tamil:     /[\u0B80-\u0BFF]/,
+      telugu:     /[\u0C00-\u0C7F]/, kannada:   /[\u0C80-\u0CFF]/,
+      malayalam:  /[\u0D00-\u0D7F]/, bengali:   /[\u0980-\u09FF]/,
+      gujarati:   /[\u0A80-\u0AFF]/, punjabi:   /[\u0A00-\u0A7F]/,
+      odia:       /[\u0B00-\u0B7F]/,
     };
     const counts = Object.entries(scripts)
       .map(([name, re]) => ({ name, count: (text.match(new RegExp(re.source, "g")) ?? []).length }))
@@ -1042,9 +1417,9 @@ export class FileUtils {
   private static buildBillFieldFail(field: BillField, reason: string): BillFieldResult {
     return {
       ...field, found: false,
-      fieldType: field.amount !== undefined ? "amount" : "text",
-      matchedLine: "", matchedValue: "", lineNumber: 0,
-      strategy: "not-found", confidence: "low", reason,
+      fieldType:    field.amount !== undefined ? "amount" : "text",
+      matchedLine:  "", matchedValue: "", lineNumber: 0,
+      strategy:     "not-found", confidence: "low", reason,
     };
   }
 
@@ -1060,34 +1435,34 @@ export class FileUtils {
   private static async writeBillReport(testInfo: any, fields: BillFieldResult[]): Promise<void> {
     try {
       const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet("PDF Bill Verify");
-      const dir = path.join(process.cwd(), "test-results", "excel");
+      const sheet    = workbook.addWorksheet("PDF Bill Verify");
+      const dir      = path.join(process.cwd(), "test-results", "excel");
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
       sheet.columns = [
-        { header: "Label", key: "label", width: 20 },
-        { header: "Type", key: "fieldType", width: 10 },
-        { header: "Expected", key: "expected", width: 20 },
-        { header: "Match", key: "match", width: 12 },
-        { header: "Result", key: "result", width: 12 },
-        { header: "Matched", key: "matchedValue", width: 25 },
-        { header: "Matched Line", key: "matchedLine", width: 50 },
-        { header: "Line No", key: "lineNumber", width: 10 },
-        { header: "Strategy", key: "strategy", width: 22 },
-        { header: "Confidence", key: "confidence", width: 12 },
+        { header: "Label",        key: "label",        width: 20 },
+        { header: "Type",         key: "fieldType",    width: 10 },
+        { header: "Expected",     key: "expected",     width: 20 },
+        { header: "Match",        key: "match",        width: 12 },
+        { header: "Result",       key: "result",       width: 12 },
+        { header: "Matched",      key: "matchedValue", width: 25 },
+        { header: "Matched Line", key: "matchedLine",  width: 50 },
+        { header: "Line No",      key: "lineNumber",   width: 10 },
+        { header: "Strategy",     key: "strategy",     width: 22 },
+        { header: "Confidence",   key: "confidence",   width: 12 },
       ];
-      sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+      sheet.getRow(1).font      = { bold: true, color: { argb: "FFFFFFFF" } };
       sheet.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
-      sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
+      sheet.getRow(1).fill      = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
 
       fields.forEach(f => {
         const row = sheet.addRow({
-          label: f.label, fieldType: f.fieldType,
-          expected: f.amount ?? f.text ?? "",
-          match: f.match ?? (f.fieldType === "amount" ? "amount" : "contains"),
-          result: f.found ? " PASS" : " FAIL",
+          label:        f.label,     fieldType:    f.fieldType,
+          expected:     f.amount ?? f.text ?? "",
+          match:        f.match ?? (f.fieldType === "amount" ? "amount" : "contains"),
+          result:       f.found ? " PASS" : " FAIL",
           matchedValue: f.matchedValue || "—", matchedLine: f.matchedLine || "—",
-          lineNumber: f.lineNumber || "—", strategy: f.strategy, confidence: f.confidence,
+          lineNumber:   f.lineNumber   || "—", strategy:    f.strategy, confidence: f.confidence,
         });
         row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: f.found ? "FFE2EFDA" : "FFFFC7CE" } };
       });
@@ -1104,7 +1479,7 @@ export class FileUtils {
     const errors: ColumnError[] = [];
     rows.forEach((row, rowIndex) => {
       schema.forEach(col => {
-        const value = row[col.name];
+        const value    = row[col.name];
         const required = col.required !== false;
         if (required && (value === undefined || value === null || value === "")) {
           errors.push({ row: rowIndex + 2, column: col.name, value, expected: col.type, reason: "Required value is empty" });
@@ -1122,60 +1497,60 @@ export class FileUtils {
   private static checkType(value: any, type: ColumnType): boolean {
     const str = String(value).trim();
     switch (type) {
-      case "number": return !isNaN(Number(str)) && str !== "";
-      case "date": return !isNaN(Date.parse(str)) || value instanceof Date;
-      case "email": return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
+      case "number":  return !isNaN(Number(str)) && str !== "";
+      case "date":    return !isNaN(Date.parse(str)) || value instanceof Date;
+      case "email":   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
       case "boolean": return ["true", "false", "yes", "no", "1", "0"].includes(str.toLowerCase());
-      case "string": return typeof value === "string" || typeof value === "number";
-      default: return true;
+      case "string":  return typeof value === "string" || typeof value === "number";
+      default:        return true;
     }
   }
 
   private static async appendMasterReport(result: VerifyResult, testInfo?: any): Promise<void> {
     try {
       if (!fs.existsSync(MASTER_REPORT_DIR)) fs.mkdirSync(MASTER_REPORT_DIR, { recursive: true });
-      const workbook = new ExcelJS.Workbook();
+      const workbook  = new ExcelJS.Workbook();
       const sheetName = "Download Summary";
       if (fs.existsSync(MASTER_REPORT_FILE)) await workbook.xlsx.readFile(MASTER_REPORT_FILE);
       let sheet = workbook.getWorksheet(sheetName);
       if (!sheet) {
         sheet = workbook.addWorksheet(sheetName);
         sheet.columns = [
-          { header: "Timestamp", key: "timestamp", width: 22 },
-          { header: "Test Name", key: "testName", width: 40 },
-          { header: "File Name", key: "fileName", width: 35 },
-          { header: "Extension", key: "extension", width: 12 },
-          { header: "File Size", key: "fileSize", width: 12 },
-          { header: "Downloaded", key: "downloaded", width: 12 },
-          { header: "File Valid", key: "valid", width: 12 },
-          { header: "Keywords", key: "containsAll", width: 14 },
-          { header: "Columns Valid", key: "columnValid", width: 14 },
+          { header: "Timestamp",     key: "timestamp",    width: 22 },
+          { header: "Test Name",     key: "testName",     width: 40 },
+          { header: "File Name",     key: "fileName",     width: 35 },
+          { header: "Extension",     key: "extension",    width: 12 },
+          { header: "File Size",     key: "fileSize",     width: 12 },
+          { header: "Downloaded",    key: "downloaded",   width: 12 },
+          { header: "File Valid",    key: "valid",        width: 12 },
+          { header: "Keywords",      key: "containsAll",  width: 14 },
+          { header: "Columns Valid", key: "columnValid",  width: 14 },
           { header: "Missing Words", key: "missingWords", width: 30 },
-          { header: "Col Errors", key: "columnErrors", width: 12 },
-          { header: "Rows", key: "rowCount", width: 10 },
-          { header: "Pages", key: "pageCount", width: 10 },
-          { header: "Reason", key: "reason", width: 40 },
+          { header: "Col Errors",    key: "columnErrors", width: 12 },
+          { header: "Rows",          key: "rowCount",     width: 10 },
+          { header: "Pages",         key: "pageCount",    width: 10 },
+          { header: "Reason",        key: "reason",       width: 40 },
         ];
-        sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+        sheet.getRow(1).font      = { bold: true, color: { argb: "FFFFFFFF" } };
         sheet.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
-        sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
+        sheet.getRow(1).fill      = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
       }
-      const pass = result.downloaded && result.valid && result.containsAll && result.columnValid;
+      const pass   = result.downloaded && result.valid && result.containsAll && result.columnValid;
       const newRow = sheet.addRow({
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        testName: testInfo?.title ?? result.testName ?? "—",
-        fileName: result.fileName || "—",
-        extension: result.extension || "—",
-        fileSize: result.fileSize,
-        downloaded: result.downloaded ? " Yes" : " No",
-        valid: result.valid ? " Pass" : " Fail",
-        containsAll: result.containsAll ? " Pass" : " Fail",
-        columnValid: result.columnValid ? " Pass" : " Fail",
+        timestamp:    new Date().toISOString().replace("T", " ").substring(0, 19),
+        testName:     testInfo?.title ?? result.testName ?? "—",
+        fileName:     result.fileName  || "—",
+        extension:    result.extension || "—",
+        fileSize:     result.fileSize,
+        downloaded:   result.downloaded  ? " Yes"  : " No",
+        valid:        result.valid        ? " Pass" : " Fail",
+        containsAll:  result.containsAll  ? " Pass" : " Fail",
+        columnValid:  result.columnValid  ? " Pass" : " Fail",
         missingWords: result.missingWords.join(", ") || "—",
         columnErrors: result.columnErrors.length > 0 ? result.columnErrors.length : "—",
-        rowCount: result.rowCount ?? "—",
-        pageCount: result.pageCount ?? "—",
-        reason: result.reason ?? "—",
+        rowCount:     result.rowCount  ?? "—",
+        pageCount:    result.pageCount ?? "—",
+        reason:       result.reason    ?? "—",
       });
       newRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: pass ? "FFE2EFDA" : "FFFFC7CE" } };
       await workbook.xlsx.writeFile(MASTER_REPORT_FILE);
@@ -1183,10 +1558,10 @@ export class FileUtils {
   }
 
   private static baseVerify(filePath: string, extensions: string[]): VerifyResult {
-    if (!fs.existsSync(filePath)) return this.fail(filePath, `File not found: ${path.basename(filePath)}`);
+    if (!fs.existsSync(filePath))           return this.fail(filePath, `File not found: ${path.basename(filePath)}`);
     const ext = path.extname(filePath).toLowerCase();
-    if (!extensions.includes(ext)) return this.fail(filePath, `Expected ${extensions.join("/")} | got ${ext}`);
-    if (fs.statSync(filePath).size === 0) return this.fail(filePath, `File is empty`);
+    if (!extensions.includes(ext))          return this.fail(filePath, `Expected ${extensions.join("/")} | got ${ext}`);
+    if (fs.statSync(filePath).size === 0)   return this.fail(filePath, `File is empty`);
     return this.buildResult(filePath, ext, true, [], []);
   }
 
@@ -1195,21 +1570,21 @@ export class FileUtils {
     missingWords: string[], columnErrors: ColumnError[], testInfo?: any
   ): VerifyResult {
     return {
-      fileName: path.basename(filePath), filePath,
-      fileSize: filePath && fs.existsSync(filePath) ? this.formatSize(fs.statSync(filePath).size) : "0 B",
+      fileName:     path.basename(filePath), filePath,
+      fileSize:     filePath && fs.existsSync(filePath) ? this.formatSize(fs.statSync(filePath).size) : "0 B",
       extension, valid, downloaded: false,
-      containsAll: missingWords.length === 0, missingWords,
+      containsAll:  missingWords.length === 0, missingWords,
       columnErrors, columnValid: columnErrors.length === 0,
-      testName: testInfo?.title, timestamp: new Date().toISOString(),
+      testName:     testInfo?.title, timestamp: new Date().toISOString(),
     };
   }
 
   private static fail(filePath: string, reason: string, testInfo?: any): VerifyResult {
     logger.error(`Verify failed → ${reason}`);
     return {
-      fileName: filePath ? path.basename(filePath) : "",
-      filePath: filePath ?? "", fileSize: "0 B",
-      extension: filePath ? path.extname(filePath) : "",
+      fileName:     filePath ? path.basename(filePath) : "",
+      filePath:     filePath ?? "", fileSize: "0 B",
+      extension:    filePath ? path.extname(filePath) : "",
       valid: false, downloaded: false,
       containsAll: false, missingWords: [],
       columnErrors: [], columnValid: false,
@@ -1227,336 +1602,17 @@ export class FileUtils {
     if (val === null || val === undefined) return "";
     if (val instanceof Date) return val.toISOString().split("T")[0];
     if (typeof val === "object" && "result" in val) return (val as any).result;
-    if (typeof val === "object" && "text" in val) return (val as any).text;
+    if (typeof val === "object" && "text"   in val) return (val as any).text;
     return val;
   }
 
   private static formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024)             return `${bytes} B`;
+    if (bytes < 1024 * 1024)      return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   private static sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  // ============================================================================
-  // FILE UTILS — ADDITIONS for BenefitNet Excel verification
-  // ----------------------------------------------------------------------------
-  // Add these 3 static methods to the FileUtils class in fileUtils.ts
-  // Place them after the existing readExcel() method (method #9).
-  //
-  // These methods handle two types of BenefitNet Excel files:
-  //
-  // TYPE A — Metadata-header Excel (Workflow Logs Report):
-  //   Row 1: Title text
-  //   Row 2: Date
-  //   Row 3: Sub-header
-  //   Row 4: Real column headers
-  //   Row 5+: Data rows
-  //   → Use: findRowByAnyValue() + verifyRowContainsAll()
-  //
-  // TYPE B — Clean-header Excel (Consolidated Membership List):
-  //   Row 1: Real column headers
-  //   Row 2+: Data rows
-  //   → Use: findRowByColumnValue() + standard row['Column'] access
-  //
-  // TYPE C — Metadata-only Excel (MemberList attachment):
-  //   No standard column headers — all data in key-value metadata rows
-  //   → Use: readExcelAllText()
-  // ============================================================================
-
-  // =============================================================================
-  // 9a. findRowByAnyValue
-  // -----------------------------------------------------------------------------
-  // Searches every cell of every row for an exact match to searchValue.
-  // Use this for TYPE A Excel files where column headers are on row 4+
-  // so FileUtils.readExcel() returns rows with wrong/mismatched column keys.
-  //
-  // EXAMPLE (Workflow Logs Report):
-  //   const rows = await FileUtils.readExcel(filePath, 'Workflow Logs Report');
-  //   const memberRow = FileUtils.findRowByAnyValue(rows, runtime.employeeNumber);
-  //   expect(memberRow).toBeDefined();
-  // =============================================================================
-  static findRowByAnyValue(rows: any[], searchValue: string): Record<string, any> | undefined {
-    return rows.find(row =>
-      Object.values(row).some(v => String(v ?? '').trim() === searchValue)
-    );
-  }
-
-  // =============================================================================
-  // 9b. verifyRowContainsAll
-  // -----------------------------------------------------------------------------
-  // Flattens all cell values of a row into a single string and asserts that
-  // every expectedValue appears in it. Use after findRowByAnyValue().
-  //
-  // EXAMPLE (Workflow Logs Report):
-  //   const memberRow = FileUtils.findRowByAnyValue(rows, runtime.employeeNumber);
-  //   FileUtils.verifyRowContainsAll(memberRow, [
-  //       runtime.lastName,
-  //       capturedClientName,
-  //       capturedMedicalPolicyName,
-  //       'Cat A_',
-  //       'Principal',
-  //       'Member Addition',
-  //   ]);
-  // =============================================================================
-  static verifyRowContainsAll(
-    row: Record<string, any>,
-    expectedValues: string[],
-    logger?: { info: (msg: string) => void }
-  ): void {
-    const rowText = Object.values(row).map(v => String(v ?? '')).join(' ');
-    if (logger) logger.info(`Row text (first 150 chars): ${rowText.substring(0, 150)}`);
-    for (const expected of expectedValues) {
-      if (!rowText.includes(expected)) {
-        throw new Error(`Expected value "${expected}" not found in row.\nRow text: ${rowText.substring(0, 300)}`);
-      }
-    }
-  }
-
-  // =============================================================================
-  // 9c. readExcelAllText
-  // -----------------------------------------------------------------------------
-  // Reads every cell of a sheet and returns all values joined as a single string.
-  // Use this for TYPE C Excel files (MemberList attachment) where there are no
-  // standard column headers — just key-value metadata rows.
-  //
-  // EXAMPLE (MemberList attachment):
-  //   const allText = await FileUtils.readExcelAllText(filePath, 'Membership List');
-  //   expect(allText).toContain('Syslatech_TestClient1');
-  //   expect(allText).toContain('MedicalPolicy1_Syslatech_TestClient1');
-  // =============================================================================
-  static async readExcelAllText(filePath: string, sheetName?: string): Promise<string> {
-    if (!fs.existsSync(filePath)) throw new Error(`Excel not found → ${filePath}`);
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(filePath);
-    const sheet = sheetName ? workbook.getWorksheet(sheetName) : workbook.worksheets[0];
-    if (!sheet) throw new Error(`Sheet not found: ${sheetName}`);
-
-    const allValues: string[] = [];
-    sheet.eachRow(row => {
-      row.eachCell(cell => {
-        const val = this.getCellValue(cell);
-        if (val !== null && val !== undefined && String(val).trim() !== '') {
-          allValues.push(String(val).trim());
-        }
-      });
-    });
-
-    return allValues.join(' ');
-  }
-
-  // removed unused helper to satisfy strict TypeScript no-unused rule
-
-  // ==========================================================================
-  // 19. verifyMemberListAttachmentExcel
-  // --------------------------------------------------------------------------
-  // MemberList Excel structure:
-  //   Row 5:  Client Name  → col 2
-  //   Row 7:  Policy Name  → col 2
-  //   Row 11: Column headers (Last Name, Employee No., Policy, Category ...)
-  //   Row 12: Member data row
-  // ==========================================================================
-  static async verifyMemberListAttachmentExcel(
-    filePath: string,
-    capturedClientName: string,
-    capturedMedicalPolicyName: string,
-    runtime: { lastName: string; employeeNumber: string; email: string; nationalIdNumber: string }
-  ): Promise<void> {
-    const XlsxPopulate = require('xlsx-populate').default || require('xlsx-populate');
-    const workbook = await XlsxPopulate.fromFileAsync(filePath);
-    const worksheet = workbook.sheet('Membership List');
-
-    const clientNameCell = String(worksheet.cell(5, 2).value() ?? '').trim();
-    const policyNameCell = String(worksheet.cell(7, 2).value() ?? '').trim();
-    logger.info(`MemberList — Client Name (Row5,Col2): "${clientNameCell}"`);
-    if (!clientNameCell.includes(capturedClientName))
-      throw new Error(`Client Name mismatch. Expected: "${capturedClientName}" | Actual: "${clientNameCell}"`);
-    logger.info(`MemberList — Policy Name (Row7,Col2): "${policyNameCell}"`);
-    if (!policyNameCell.includes(capturedMedicalPolicyName))
-      throw new Error(`Policy Name mismatch. Expected: "${capturedMedicalPolicyName}" | Actual: "${policyNameCell}"`);
-
-    const HEADER_ROW = 11;
-    const DATA_ROW = 12;
-    const MAX_COL = 50;
-    const headerToCol: Record<string, number> = {};
-    for (let c = 1; c <= MAX_COL; c++) {
-      const hdr = worksheet.cell(HEADER_ROW, c).value();
-      if (hdr) headerToCol[String(hdr).trim()] = c;
-    }
-
-    const get = (col: string): string =>
-      String(worksheet.cell(DATA_ROW, headerToCol[col] ?? 0).value() ?? '').trim();
-
-    const fields: [string, string, string, boolean][] = [
-      ['Last Name', get('Last Name'), runtime.lastName, true],
-      ['Employee No.', get('Employee No.'), runtime.employeeNumber, true],
-      ['Policy', get('Policy'), capturedMedicalPolicyName, true],
-      ['Category', get('Category'), 'Cat A_', false],
-      ['Relation', get('Relation'), 'Principal', true],
-      ['Marital Status', get('Marital Status'), 'Married', true],
-      ['Nationality', get('Nationality'), 'India', true],
-      ['National ID Number', get('National ID Number'), runtime.nationalIdNumber, false],
-      ['Email', get('Email'), runtime.email, true],
-    ];
-
-    for (const [label, actual, expected, exact] of fields) {
-      logger.info(`MemberList — ${label}: "${actual}" | Expected: "${expected}"`);
-      if (exact && actual !== expected) throw new Error(`${label} mismatch. Expected: "${expected}" | Actual: "${actual}"`);
-      if (!exact && !actual.includes(expected)) throw new Error(`${label} should contain "${expected}" | Actual: "${actual}"`);
-    }
-
-    logger.pass('MemberList attachment Excel — all verifications passed');
-  }
-
-  // ==========================================================================
-  // 20. verifyWorkflowLogsExcelMemberRow
-  // --------------------------------------------------------------------------
-  // Workflow Logs Excel structure:
-  //   Rows 1-4: empty (pre-allocated)
-  //   Row 5:    Title
-  //   Row 6:    Date
-  //   Row 7:    Sub-header
-  //   Row 8:    Real column headers (Employee Number col 12 ...)
-  //   Row 9+:   Data rows — scan col 1 (Transaction ID) to find last real row
-  // ==========================================================================
-  static async verifyWorkflowLogsExcelMemberRow(
-    filePath: string,
-    runtime: { lastName: string; employeeNumber: string },
-    capturedClientName: string,
-    capturedMedicalPolicyName: string
-  ): Promise<void> {
-    const XlsxPopulate = require('xlsx-populate').default || require('xlsx-populate');
-    const workbook = await XlsxPopulate.fromFileAsync(filePath);
-    const worksheet = workbook.sheet('Workflow Logs Report');
-
-    const HEADER_ROW = 8;
-    const FIRST_DATA_ROW = 9;
-    const MAX_COL = 54;
-
-    const headerToCol: Record<string, number> = {};
-    for (let c = 1; c <= MAX_COL; c++) {
-      const hdr = worksheet.cell(HEADER_ROW, c).value();
-      if (hdr) headerToCol[String(hdr).trim()] = c;
-    }
-    logger.info(`Workflow headers mapped: ${Object.keys(headerToCol).length} columns`);
-
-    const get = (row: number, col: string): string =>
-      String(worksheet.cell(row, headerToCol[col] ?? 0).value() ?? '').trim();
-
-    let lastDataRow = FIRST_DATA_ROW;
-    for (let r = FIRST_DATA_ROW; r <= 10000; r++) {
-      if (String(worksheet.cell(r, 1).value() ?? '').trim() === '') break;
-      lastDataRow = r;
-    }
-    const totalDataRows = lastDataRow - FIRST_DATA_ROW + 1;
-    logger.info(`Workflow data rows: ${totalDataRows} (rows ${FIRST_DATA_ROW}–${lastDataRow})`);
-
-    let memberDataRow = -1;
-    for (let r = FIRST_DATA_ROW; r <= lastDataRow; r++) {
-      if (get(r, 'Employee Number') === runtime.employeeNumber) { memberDataRow = r; break; }
-    }
-
-    logger.info(`Searching for Employee Number: ${runtime.employeeNumber} in ${totalDataRows} rows`);
-    if (memberDataRow < 0)
-      throw new Error(`Employee Number "${runtime.employeeNumber}" not found in Workflow Logs (rows ${FIRST_DATA_ROW}–${lastDataRow})`);
-
-    const fields: [string, string, string, boolean][] = [
-      ['Member Name', get(memberDataRow, 'Member Name'), runtime.lastName, false],
-      ['Employee No', get(memberDataRow, 'Employee Number'), runtime.employeeNumber, true],
-      ['Company', get(memberDataRow, 'Company'), capturedClientName, true],
-      ['Policy', get(memberDataRow, 'Policy'), capturedMedicalPolicyName, true],
-      ['Category', get(memberDataRow, 'Category'), 'Cat A_', false],
-      ['Relation', get(memberDataRow, 'Relation'), 'Principal', true],
-      ['Request Type', get(memberDataRow, 'Request Type'), 'Member Addition', true],
-      ['Nationality', get(memberDataRow, 'Nationality'), 'India', true],
-    ];
-
-    logger.info(`Workflow — Row ${memberDataRow} found`);
-    for (const [label, actual, expected, exact] of fields) {
-      logger.info(`  ${label.padEnd(14)}: "${actual}" | Expected: "${expected}"`);
-      if (exact && actual !== expected) throw new Error(`${label} mismatch. Expected: "${expected}" | Actual: "${actual}"`);
-      if (!exact && !actual.includes(expected)) throw new Error(`${label} should contain "${expected}" | Actual: "${actual}"`);
-    }
-
-    logger.pass('Workflow Logs Excel — all column verifications passed');
-  }
-
-  // ==========================================================================
-  // 21. verifyConsolidatedMembershipExcelMemberRow
-  // --------------------------------------------------------------------------
-  // Consolidated Membership Excel structure:
-  //   Row 4: Title
-  //   Row 5: Date
-  //   Row 6: Real column headers (57 cols, Employee Number col 14 ...)
-  //   Row 7+: Data rows — scan col 1 (BenefitNet ID) to find last real row
-  //   Max row: 10005 (pre-allocated)
-  // ==========================================================================
-  static async verifyConsolidatedMembershipExcelMemberRow(
-    filePath: string,
-    runtime: { firstName: string; lastName: string; employeeNumber: string; email: string; nationalIdNumber: string },
-    capturedMedicalPolicyName: string
-  ): Promise<void> {
-    const XlsxPopulate = require('xlsx-populate').default || require('xlsx-populate');
-    const workbook = await XlsxPopulate.fromFileAsync(filePath);
-    const worksheet = workbook.sheet('Membership List');
-
-    const HEADER_ROW = 6;
-    const FIRST_DATA_ROW = 7;
-    const MAX_COL = 57;
-
-    const headerToCol: Record<string, number> = {};
-    for (let c = 1; c <= MAX_COL; c++) {
-      const hdr = worksheet.cell(HEADER_ROW, c).value();
-      if (hdr) headerToCol[String(hdr).trim()] = c;
-    }
-
-    const get = (row: number, col: string): string =>
-      String(worksheet.cell(row, headerToCol[col] ?? 0).value() ?? '').trim();
-
-    let lastDataRow = FIRST_DATA_ROW;
-    for (let r = FIRST_DATA_ROW; r <= 10000; r++) {
-      if (String(worksheet.cell(r, 1).value() ?? '').trim() === '') break;
-      lastDataRow = r;
-    }
-    const totalRows = lastDataRow - FIRST_DATA_ROW + 1;
-    logger.info(`Consolidated data rows: ${totalRows} (rows ${FIRST_DATA_ROW}–${lastDataRow})`);
-
-    let memberDataRow = -1;
-    for (let r = FIRST_DATA_ROW; r <= lastDataRow; r++) {
-      if (get(r, 'Employee Number') === runtime.employeeNumber) { memberDataRow = r; break; }
-    }
-
-    logger.info(`Searching for Employee Number: ${runtime.employeeNumber} in ${totalRows} rows`);
-    if (memberDataRow < 0)
-      throw new Error(`Employee Number "${runtime.employeeNumber}" not found in Consolidated (rows ${FIRST_DATA_ROW}–${lastDataRow})`);
-
-    const benefitNetId = get(memberDataRow, 'BenefitNet ID');
-    logger.info(`Consolidated — Row ${memberDataRow} | BenefitNet ID: ${benefitNetId}`);
-
-    const fields: [string, string, string, boolean][] = [
-      ['First Name', get(memberDataRow, 'First Name'), runtime.firstName, true],
-      ['Last Name', get(memberDataRow, 'Last Name'), runtime.lastName, true],
-      ['Employee Number', get(memberDataRow, 'Employee Number'), runtime.employeeNumber, true],
-      ['Email', get(memberDataRow, 'Email'), runtime.email, true],
-      ['Nationality', get(memberDataRow, 'Nationality'), 'India', true],
-      ['Marital Status', get(memberDataRow, 'Marital Status'), 'Married', true],
-      ['Relation', get(memberDataRow, 'Relation'), 'Principal', true],
-      ['Policy', get(memberDataRow, 'Policy'), capturedMedicalPolicyName, true],
-      ['Category', get(memberDataRow, 'Category'), 'Cat A_', false],
-      ['Country of Residence', get(memberDataRow, 'Country of Residence'), 'United Arab Emirates', true],
-      ['Member Profile Status', get(memberDataRow, 'Member Profile Status'), 'Pending Addition', true],
-      ['National ID Number', get(memberDataRow, 'National ID Number'), runtime.nationalIdNumber, false],
-    ];
-
-    for (const [label, actual, expected, exact] of fields) {
-      logger.info(`  ${label.padEnd(22)}: "${actual}" | Expected: "${expected}"`);
-      if (exact && actual !== expected) throw new Error(`${label} mismatch. Expected: "${expected}" | Actual: "${actual}"`);
-      if (!exact && !actual.includes(expected)) throw new Error(`${label} should contain "${expected}" | Actual: "${actual}"`);
-    }
-
-    logger.pass('Consolidated Membership Excel — all column verifications passed');
   }
 }

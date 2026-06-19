@@ -80,6 +80,7 @@ export class ReportPage extends BasePage {
         if (!fs.existsSync(downloadDirectory)) fs.mkdirSync(downloadDirectory, { recursive: true });
 
         const downloadEventPromise = this.page.waitForEvent('download', { timeout: 30000 });
+        await this.scrollToElement(this.reportPage.ExportToExcelButton);
         await this.click(this.reportPage.ExportToExcelButton);
         const downloadedFile = await downloadEventPromise;
 
@@ -322,19 +323,19 @@ export class ReportPage extends BasePage {
         log.info(`  Last Name      : "${lastName}"  | Expected: "${runtime.lastName}"`);
         log.info(`  Employee No    : "${employeeNo}"  | Expected: "${runtime.employeeNumber}"`);
 
-        expect(firstName, `First Name mismatch`).toBe(runtime.firstName);
-        expect(lastName, `Last Name mismatch`).toBe(runtime.lastName);
-        expect(employeeNo, `Employee Number mismatch`).toBe(runtime.employeeNumber);
-        expect(email, `Email mismatch`).toBe(runtime.email);
-        expect(nationality, `Nationality should be "India"`).toBe('India');
+        expect(firstName).toBe(runtime.firstName);
+        expect(lastName).toBe(runtime.lastName);
+        expect(employeeNo).toBe(runtime.employeeNumber);
+        expect(email).toBe(runtime.email);
+        expect(nationality).toBe('India');
         const expectedMaritalStatus = runtime.maritalStatus ?? 'Married';
-        expect(maritalStatus, `Marital Status should be "${expectedMaritalStatus}"`).toBe(expectedMaritalStatus);
-        expect(relation, `Relation should be "Principal"`).toBe('Principal');
-        expect(policy, `Policy mismatch`).toBe(capturedMedicalPolicyName);
-        expect(category, `Category should contain "Cat A_"`).toContain('Cat A_');
-        expect(countryOfRes, `Country of Residence should be "United Arab Emirates"`).toBe('United Arab Emirates');
-        expect(profileStatus, `Member Profile Status should be "Pending Addition"`).toBe('Pending Addition');
-        expect(nationalId, `National ID mismatch`).toContain(runtime.nationalIdNumber);
+        expect(maritalStatus).toBe(expectedMaritalStatus);
+        expect(relation).toBe('Principal');
+        expect(policy).toBe(capturedMedicalPolicyName);
+        expect(category).toContain('Cat A_');
+        expect(countryOfRes).toBe('United Arab Emirates');
+        expect(profileStatus).toBe('Pending Addition');
+        expect(nationalId).toContain(runtime.nationalIdNumber);
 
         log.info('Consolidated Membership Excel — all column verifications passed');
     }

@@ -15,7 +15,7 @@ export class LoginPage extends BasePage {
      * Steps: Directs the browser context to the base environment path, waits for the primary log-in view identifier text container to render, and confirms structural presence. 
      * Fills credential string parameters inside the username and password input locator nodes, hits the submission trigger element, and asserts valid verification banners.
      */
-    async login(baseURL: string, username: string, password: string) {
+    async loginToBenefitNetApplication(baseURL: string, username: string, password: string) {
         await this.navigateTo(baseURL);
         await this.waitForElementIsVisible(this.loginPage.LoginPageText);
         await this.assertElementVisible(this.loginPage.LoginPageText);

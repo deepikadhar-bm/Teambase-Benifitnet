@@ -8,6 +8,7 @@ import { logger as log } from 'src/helpers/logger';
 import { testDataManager as tdm } from 'test-data/testDataManager';
 import { APP_CONSTANTS } from 'src/constant/app-constants';
 import { NUMBER_OF_MEMBERS, getGenderForMemberIndex, getProfileNameByGender, pickRandom, getDropdownValues } from 'src/config/memberGenerationConfig';
+import { FileUtils } from 'src/helpers/fileUtils';
 
 const TC_ID = 'REG_TS01_TC01';
 const TC_TITLE = `should add ${NUMBER_OF_MEMBERS} principal members via bulk import and verify email notifications, attachment Excel, workflow logs report and consolidated membership report`;
@@ -26,15 +27,21 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
         reportPage = new ReportPage(page);
     });
 
+    test.afterAll(async () => {
+        FileUtils.clearTestContext();
+        FileUtils.clearExcelStepHistory(TC_ID);
+    });
+
     test.only(TC_TITLE, async ({ page }) => {
 
+        FileUtils.setTestContext(TC_ID);
         log.tcStart(TC_ID, TC_TITLE);
 
         try {
 
             log.step('STEP 1: Login to application');
             try {
-                await loginPage.login(qaConfig.baseURL, qaConfig.credentials.username, qaConfig.credentials.password);
+                await loginPage.loginToBenefitNetApplication(qaConfig.baseURL, qaConfig.credentials.username, qaConfig.credentials.password);
                 log.stepPass('STEP 1: Login successful');
             } catch (e) {
                 await log.stepFail(page, 'STEP 1: Login failed');
@@ -121,7 +128,6 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
 
                 var round1ErrorsListFinal = round1ErrorsList;
                 var isNoHrWarningDisplayedFinal = isNoHrWarningDisplayed;
-                var round1ExcelRowsFinal = round1ExcelRows;
             } catch (e) {
                 await log.stepFail(page, 'STEP 4: Round 1 validation failed unexpectedly');
                 throw e;
@@ -191,6 +197,7 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
 
                 await clientPage.assertPreviousValidationErrorsAreResolved(allRound1Errors);
                 await clientPage.handleValidationOutcomeAndProceedToImport();
+
                 log.stepPass(`STEP 5: Round 2 validation passed — all mandatory fields resolved for all ${NUMBER_OF_MEMBERS} members`);
             } catch (e) {
                 await log.stepFail(page, 'STEP 5: Round 2 re-validation failed');
@@ -215,7 +222,12 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                     const member = runtimeMembers[i];
 
                     log.info(`--- Verifying Member ${i + 1} email: ${member.lastName} ---`);
-                    await emailLogPage.assertEmailLogRowExistsForMember(capturedClientName, capturedMedicalPolicyName, member.lastName);
+                    await emailLogPage.assertEmailLogRowExistsForMember(capturedClientName, capturedMedicalPolicyName);
+                    await emailLogPage.assertEmailLogRowExistsForLastNameWithAdditionRequest(member.lastName);
+                    await emailLogPage.assertEmailLogRowExistsForLastNameWithNotificationType(member.lastName);
+                    await emailLogPage.assertEmailLogRowExistsForToYopEmail(member.lastName, member.email);
+                    await emailLogPage.assertEmailLogRowExistsForToYopEmailHaveAttachments(member.lastName);
+                    await emailLogPage.assertEmailLogRowExistsForToYopEmailHaveAttachmentsZero(member.lastName);
                     await emailLogPage.openMemberEmailLogDetail(member.lastName);
                     await emailLogPage.assertEmailDetailHeadingIsVisible();
                     await emailLogPage.assertEmailDetailSubjectContainsMemberName(member.lastName);
@@ -253,7 +265,14 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                 await emailLogPage.assertEmailDetailMembersAdditionBulkRequestInsurer(APP_CONSTANTS.TESTINSURER);
                 await emailLogPage.assertEmailDetailMembersAdditionBulkRequestPolicyName(capturedMedicalPolicyName);
                 await emailLogPage.assertAttachmentFileNameContains(APP_CONSTANTS.ATTACHMENTMEMBERLIST);
-                await emailLogPage.downloadAndVerifyAttachmentExcel(capturedClientName, capturedMedicalPolicyName, runtimeMembers[0]);
+
+                for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
+                    const member = runtimeMembers[i];
+                    log.info(`--- Verifying Member ${i + 1} attachment Excel: ${member.lastName} ---`);
+                    await emailLogPage.downloadAndVerifyAttachmentExcel(capturedClientName, capturedMedicalPolicyName, member);
+                    log.stepPass(`Member ${i + 1} attachment Excel verified`);
+                }
+
                 log.stepPass('STEP 8: Insurer bulk request email and attachment Excel verified');
             } catch (e) {
                 await log.stepFail(page, 'STEP 8: Insurer bulk request email verification failed');
@@ -269,6 +288,7 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                 await reportPage.selectWorkflowCategory();
                 await reportPage.clickSearch();
                 const workflowExcelPath = await reportPage.exportWorkflowToExcel();
+                await FileUtils.captureExcelStep(workflowExcelPath, 'Step 9 — workflow logs report exported', TC_ID);
 
                 for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
                     const member = runtimeMembers[i];
@@ -292,6 +312,7 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                 await reportPage.selectConsolidatedCategory();
                 await reportPage.clickSearch();
                 const consolidatedExcelPath = await reportPage.exportConsolidatedToExcel();
+                await FileUtils.captureExcelStep(consolidatedExcelPath, 'Step 10 — consolidated membership report exported', TC_ID);
 
                 for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
                     const member = runtimeMembers[i];

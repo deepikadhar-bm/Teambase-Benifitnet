@@ -52,46 +52,45 @@ export class EmailLogElements {
         return this.named('Email Log Notification Type Label',
             this.page.getByText('Notification Type:'));
     }
+
     emailLogRowViewLinkByMemberLastName(lastName: string): Locator {
         return this.named(`Email Log Row View Link: ${lastName}`,
-            this.page.locator('tr')
-                .filter({ hasText: lastName })
-                .getByRole('link', { name: 'View' })
-                .first()
-        );
+            this.page.locator('tr').filter({ hasText: lastName }).getByRole('link', { name: 'View' }).first());
     }
 
-    // emailLogRowViewLinkByMemberLastName(memberLastName: string): Locator {
-    //     return this.named(`Email Log Row View Link: ${memberLastName}`,
-    //         this.page.locator(`//tbody[@role="rowgroup"]//tr//td[@colspan="2"]//small[contains(text(),"${memberLastName}")]/../..//td[3]//small[contains(text()," Add Members Bulk") and span[text()="Notification Type:"]]/../..//td[5]//a[normalize-space(text()=" View")]`));
-    // }
-    verifyEmailLogRowByLastNameWithAdditionRequest(lastName: string): Locator {
+    emailLogRowByLastNameWithAdditionRequest(lastName: string): Locator {
         return this.named(`Email Log Row With Last Name And Addition Request: ${lastName}`,
-            this.page.locator(`//tbody[@role="rowgroup"]//tr//td[@colspan="2"]//small[contains(text(),"${lastName}") and contains(text(),"Addition Request")]`));
+            this.page.locator(`//tr//td[@colspan="2"]//small[contains(text(),"${lastName}") and contains(text(),"Addition Request")]`));
     }
-    verifyEmailLogRowByLastNameWithAttachmentZero(lastName: string): Locator {
-        return this.named(`Email Log Row With Addition Request Attachment Zero: ${lastName}`,
-            this.page.locator(`//tr[.//small[span[text()="Subject: "] and contains(.,'${lastName}')]]//td[4]//small[contains(.,'Attachments:') and contains(.,'0')]`));
+
+    emailLogRowByLastNameWithNotificationType(lastName: string): Locator {
+        return this.named(`Email Log Row Last Name With Notification Type: ${lastName}`,
+            this.page.locator(`//tr//td[@colspan="2"]//small[contains(text(),"${lastName}")]/../..//td[3]//small[span[text()="Notification Type:"] and contains(text()," Add Members Bulk")]`));
     }
-    
-    verifyEmailDetailByLastNameWithToYopEmailLabel(toYopEmail: string): Locator {
+
+    emailDetailByLastNameWithToYopEmailLabel(toYopEmail: string, lastName: string): Locator {
         return this.named(`Email Log Row To Yop Email: ${toYopEmail}`,
-            this.page.locator(`//tbody[@role="rowgroup"]//tr//td[@colspan="2"]//small[span[text()="To: "] and contains(text(),"${toYopEmail}")]`));
+            this.page.locator(`//tr//td[@colspan="2"]//small[contains(text(),"${lastName}") and contains(text(),"Addition Request")]/..//small[span[text()="To: "] and contains(text(),"${toYopEmail}")]`));
+    }
+
+    emailLogRowByLastNameWithAttachmentZero(lastName: string): Locator {
+        return this.named(`Email Log Row With Attachment Zero: ${lastName}`,
+            this.page.locator(`//tr[.//small[span[text()="Subject: "] and contains(.,'${lastName}')]]//td[4]//small[contains(.,'Attachments:') and contains(.,'0')]`));
     }
 
     get insurerBulkRequestEmailViewLink(): Locator {
         return this.named('Insurer Bulk Request Email View Link',
-            this.page.locator(`//tbody[@role="rowgroup"]//tr//td[2]//small[contains(text(),"Member Addition Bulk Request")]/../..//td[5]//a[normalize-space(text()=" View")]`).first());
+            this.page.locator(`//tr//td[2]//small[contains(text(),"Member Addition Bulk Request")]/../..//td[5]//a[normalize-space(text()=" View")]`).first());
     }
 
     emailLogClientNameCellByMemberLastName(memberLastName: string, clientName: string): Locator {
         return this.named(`Email Log Client Cell: ${memberLastName}`,
-            this.page.locator(`//tbody[@role="rowgroup"]//tr//small[contains(text(),"${memberLastName}")]/../..//td[3]//small[contains(text(),"Wrong")]/../..//td[4]//small//span[text()="Client: "]/..//a[contains(text(),"${clientName}")]`));
+            this.page.locator(`//tr//small[contains(text(),"${memberLastName}")]/../..//td[3]//small[contains(text(),"Wrong")]/../..//td[4]//small//span[text()="Client: "]/..//a[contains(text(),"${clientName}")]`));
     }
 
     emailLogPolicyCellByMemberLastName(memberLastName: string, policyName: string): Locator {
         return this.named(`Email Log Policy Cell: ${memberLastName}`,
-            this.page.locator(`//tbody[@role="rowgroup"]//tr//td[@colspan="2"]//small[contains(text(),"${memberLastName}")]/../..//td[3]//small[contains(text(),"Wrong")]/../..//td[4]//small//span[text()="Policy: "]/..//a[contains(text(),"${policyName}")]`));
+            this.page.locator(`//tr//td[@colspan="2"]//small[contains(text(),"${memberLastName}")]/../..//td[3]//small[contains(text(),"Wrong")]/../..//td[4]//small//span[text()="Policy: "]/..//a[contains(text(),"${policyName}")]`));
     }
 
     get addMembersBulkEmailDetailHeading(): Locator {
@@ -191,10 +190,6 @@ export class EmailLogElements {
 
     get emailLogNextPageButton(): Locator {
         return this.named('Email Log Next Page Button',
-            this.page.locator(
-                `//li[contains(@class,"k-next-button") and not(contains(@class,"k-disabled"))]//a` +
-                ` | //a[@aria-label="Go to the next page" and not(ancestor::li[contains(@class,"k-disabled") or contains(@class,"disabled")])]`
-            ));
+            this.page.locator('//li[contains(@class,"k-next-button") and not(contains(@class,"k-disabled"))]//a | //a[@aria-label="Go to the next page" and not(ancestor::li[contains(@class,"k-disabled") or contains(@class,"disabled")])]'));
     }
-
 }

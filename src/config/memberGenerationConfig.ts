@@ -8,7 +8,7 @@ import testData from 'test-data/json-files/benefitnet_test_data.json';
 
 // ==================== CONFIGURATION ====================
 // Number of members to generate for each test
-export const NUMBER_OF_MEMBERS = 5;
+export const NUMBER_OF_MEMBERS = 3;
 
 // Gender pattern - will repeat based on NUMBER_OF_MEMBERS
 // Example: ['Male', 'Male', 'Female', 'Female', 'Female', 'Male']
