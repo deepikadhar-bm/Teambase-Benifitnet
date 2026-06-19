@@ -234,7 +234,7 @@ export class ClientPage extends BasePage {
             const isStillFailing = remainingErrors.some(
                 err => err.toLowerCase().includes(fieldName.toLowerCase())
             );
-            expect(isStillFailing, `Field "${fieldName}" still has a validation error`).toBeFalsy();
+            expect(isStillFailing).toBeFalsy();
         }
         log.info('All previously failing required fields are now resolved');
     }
@@ -390,22 +390,16 @@ export class ClientPage extends BasePage {
                 const found = excelCommentSegments.some(
                     seg => seg.toLowerCase().includes(fieldName.toLowerCase())
                 );
-                expect(
-                    found,
-                    `Member[${memberIndex}]: UI required error "${fieldName}" not in Excel comments.\nComments: "${excelComments}"`
-                ).toBe(true);
-                log.info(`  ✓ Required error "${fieldName}" confirmed in Excel comments`);
+                expect(found).toBe(true);
+                log.info(`Required error "${fieldName}" confirmed in Excel comments`);
             }
 
             for (const fieldName of result.invalidFieldErrors) {
                 const found = excelCommentSegments.some(
                     seg => seg.toLowerCase().includes(fieldName.toLowerCase())
                 );
-                expect(
-                    found,
-                    `Member[${memberIndex}]: UI invalid field "${fieldName}" not in Excel comments.\nComments: "${excelComments}"`
-                ).toBe(true);
-                log.info(`  ✓ Invalid error "${fieldName}" confirmed in Excel comments`);
+                expect(found).toBe(true);
+                log.info(`   Invalid error "${fieldName}" confirmed in Excel comments`);
             }
         }
 

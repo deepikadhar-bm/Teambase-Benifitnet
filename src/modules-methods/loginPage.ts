@@ -12,19 +12,13 @@ export class LoginPage extends BasePage {
 
     /**
      * Action: Navigate to Login Landing Page URL
-     * Steps: Directs the browser context to the base environment path, waits for the primary log-in view identifier text container to render, and confirms structural presence.
+     * Steps: Directs the browser context to the base environment path, waits for the primary log-in view identifier text container to render, and confirms structural presence. 
+     * Fills credential string parameters inside the username and password input locator nodes, hits the submission trigger element, and asserts valid verification banners.
      */
-    async navigateToLogin(baseURL: string) {
+    async login(baseURL: string, username: string, password: string) {
         await this.navigateTo(baseURL);
         await this.waitForElementIsVisible(this.loginPage.LoginPageText);
         await this.assertElementVisible(this.loginPage.LoginPageText);
-    }
-
-    /**
-     * Step Group: SG : LG : Standard Application Authentication Execution
-     * Steps: Fills credential string parameters inside the username and password input locator nodes, hits the submission trigger element, and asserts valid verification banners.
-     */
-    async login(username: string, password: string) {
         await this.fill(this.loginPage.UserNameInput, username);
         await this.fill(this.loginPage.PasswordInput, password);
         await this.click(this.loginPage.LoginButton);
@@ -32,9 +26,9 @@ export class LoginPage extends BasePage {
     }
 
     /**
-     * Action: Terminate Session and Disconnect Account User
-     * Steps: Executes an interactive single click upon the designated global logout navigation element to safely clear state records.
-     */
+ * Action: Terminate Session and Disconnect Account User
+ * Steps: Executes an interactive single click upon the designated global logout navigation element to safely clear state records.
+ */
     async logout() {
         await this.click(this.loginPage.LogoutButton);
     }

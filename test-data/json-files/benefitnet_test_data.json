@@ -350,7 +350,7 @@
         "mandatory": true,
         "inputType": "text",
         "referenceSheet": null,
-        "notes": "Generated dynamically per test run. Format: syslatech_hr1_XXX@yopmail.com"
+        "notes": "Generated dynamically per test run. Format: syslatechXXX@yopmail.com"
       },
       {
         "excelHeader": "Alternative Email (*)",

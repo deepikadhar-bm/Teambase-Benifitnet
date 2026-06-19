@@ -96,7 +96,28 @@ export class EmailLogPage extends BasePage {
         await this.isVisible(this.emailLog.emailLogClientNameCellByMemberLastName(memberLastName, clientName));
         await this.isVisible(this.emailLog.emailLogPolicyCellByMemberLastName(memberLastName, policyName));
     }
+    /**
+     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+     * Steps: Asserts text visibility components for operational classifications, subject, To email and notification type.
+     */
+    async assertEmailLogRowExistsForLastNameWithAdditionRequest(memberLastName: string): Promise<void> {
+        await this.assertElementVisible(this.emailLog.verifyEmailLogRowByLastNameWithAdditionRequest(memberLastName));
+    }
+        /**
+     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+     * Steps: Asserts element visibility components for subject.
+     */
+    async assertEmailLogRowExistsForToYopEmail(toEmail: string): Promise<void> {
+        await this.isVisible(this.emailLog.verifyEmailDetailToYopEmailField(toEmail));
+    }
 
+    async assertEmailLogRowExistsForToYopEmailHaveAttachments(toEmail: string, memberLastName: string): Promise<void> {
+        await this.isVisible(this.emailLog.emailDetailSubjectByMemberLastName(memberLastName));
+        await this.isVisible(this.emailLog.verifyEmailDetailToYopEmailField(toEmail));
+    }
+    async assertEmailLogRowExistsForToYopEmailHaveAttachmentsZero(): Promise<void> {
+        await this.isVisible(this.emailLog.verifyEmailLogRowByLastNameWithAdditionRequestAttachmentZero);
+    }
     /**
      * Action: Assert Structural Visibility of Email Metadata Details Heading Box
      * Steps: Tracks element state loops to confirm the visual presence of message detailing headings inside the framework wrapper.

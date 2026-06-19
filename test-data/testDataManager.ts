@@ -86,7 +86,7 @@ function generateUniqueEstablishmentId(): string {
 
 function generateEmail(_firstName: string, _lastName: string): string {
     const threeDigits = Math.floor(Math.random() * 900) + 100;
-    return `syslatech_${threeDigits}@yopmail.com`;
+    return `syslatech${threeDigits}@yopmail.com`;
 }
 
 function getCurrentIndianDate(): string {

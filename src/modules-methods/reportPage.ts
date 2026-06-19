@@ -97,7 +97,7 @@ export class ReportPage extends BasePage {
             waited += 300;
         }
 
-        expect(fs.existsSync(savedFilePath), 'Workflow Excel should exist after download').toBe(true);
+        expect(fs.existsSync(savedFilePath)).toBe(true);
         log.info(`Workflow Excel downloaded: ${uniqueFileName} (${(fs.statSync(savedFilePath).size / 1024).toFixed(1)} KB)`);
         return savedFilePath;
     }
@@ -141,7 +141,7 @@ export class ReportPage extends BasePage {
         }
 
         log.info(`Searching for Employee Number: ${runtime.employeeNumber} in ${totalDataRows} rows`);
-        expect(memberDataRow, `Employee Number "${runtime.employeeNumber}" not found in Workflow Logs (rows ${FIRST_DATA_ROW}–${lastDataRow})`).toBeGreaterThan(0);
+        expect(memberDataRow).toBeGreaterThan(0);
         if (memberDataRow < 0) return;
 
         const memberName = getCell(memberDataRow, 'Member Name');
@@ -163,14 +163,14 @@ export class ReportPage extends BasePage {
         log.info(`  Request Type : "${requestType}"`);
         log.info(`  Nationality  : "${nationality}"`);
 
-        expect(memberName, `Member Name should contain "${runtime.lastName}"`).toContain(runtime.lastName);
-        expect(employeeNo, `Employee Number mismatch`).toBe(runtime.employeeNumber);
-        expect(company, `Company mismatch`).toBe(capturedClientName);
-        expect(policy, `Policy mismatch`).toBe(capturedMedicalPolicyName);
-        expect(category, `Category should contain "Cat A_"`).toContain('Cat A_');
-        expect(relation, `Relation should be "Principal"`).toBe('Principal');
-        expect(requestType, `Request Type should be "Member Addition"`).toBe('Member Addition');
-        expect(nationality, `Nationality should be "India"`).toBe('India');
+        expect(memberName).toContain(runtime.lastName);
+        expect(employeeNo).toBe(runtime.employeeNumber);
+        expect(company).toBe(capturedClientName);
+        expect(policy).toBe(capturedMedicalPolicyName);
+        expect(category).toContain('Cat A_');
+        expect(relation).toBe('Principal');
+        expect(requestType).toBe('Member Addition');
+        expect(nationality).toBe('India');
 
         log.info('Workflow Logs Excel — all column verifications passed');
     }
@@ -257,8 +257,8 @@ export class ReportPage extends BasePage {
             await this.page.waitForTimeout(300);
             waited += 300;
         }
-        expect(fs.existsSync(savedFilePath), 'Consolidated Excel should exist after download').toBe(true);
-        expect(uniqueFileName, 'File name should contain ConsolidatedMembershipList').toContain('ConsolidatedMembershipList');
+        expect(fs.existsSync(savedFilePath)).toBe(true);
+        expect(uniqueFileName).toContain('ConsolidatedMembershipList');
         log.info(`Consolidated Excel downloaded: ${uniqueFileName} (${(fs.statSync(savedFilePath).size / 1024).toFixed(1)} KB)`);
         return savedFilePath;
     }
@@ -292,7 +292,7 @@ export class ReportPage extends BasePage {
             lastDataRow = r;
         }
         const totalRows = lastDataRow - FIRST_DATA_ROW + 1;
-        log.info(`Consolidated data rows: ${totalRows} (rows ${FIRST_DATA_ROW}–${lastDataRow})`);
+        log.info(`Consolidated data rows: ${totalRows} (rows ${FIRST_DATA_ROW} - ${lastDataRow})`);
 
         let memberDataRow = -1;
         for (let r = FIRST_DATA_ROW; r <= lastDataRow; r++) {
@@ -300,7 +300,7 @@ export class ReportPage extends BasePage {
         }
 
         log.info(`Searching for Employee Number: ${runtime.employeeNumber} in ${totalRows} rows`);
-        expect(memberDataRow, `Employee Number "${runtime.employeeNumber}" not found in Consolidated (rows ${FIRST_DATA_ROW}–${lastDataRow})`).toBeGreaterThan(0);
+        expect(memberDataRow).toBeGreaterThan(0);
         if (memberDataRow < 0) return;
 
         const benefitNetId = getCell(memberDataRow, 'BenefitNet ID');

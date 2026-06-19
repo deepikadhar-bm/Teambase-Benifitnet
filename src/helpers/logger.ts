@@ -25,18 +25,6 @@ export enum LogLevel {
   TC_END = 'TC_END',
 }
 
-interface LogEntry {
-  timestamp: string;
-  level: string;
-  tcId?: string;
-  tcTitle?: string;
-  step?: number;
-  message: string;
-  durationMs?: number;
-  screenshotPath?: string;
-  attachments?: string[];
-}
-
 const C: Record<string, string> = {
   STEP: '\x1b[1m\x1b[97m',
   PASS: '\x1b[1m\x1b[92m',
@@ -77,8 +65,7 @@ export class Logger {
 
   private readonly logDir: string;
   private readonly logFile: string;
-  private readonly jsonFile: string;
-  private readonly sessionId: string;
+
   private readonly currentLevel: LogLevel;
 
   private ctx: TestContext | null = null;
@@ -90,19 +77,15 @@ export class Logger {
   private static stepStartTime = Date.now();
   private static testActive = false;
 
-  private readonly entries: LogEntry[] = [];
-
   private constructor() {
     this.logDir = 'logs';
     if (!fs.existsSync(this.logDir)) {
       fs.mkdirSync(this.logDir, { recursive: true });
     }
 
-    this.sessionId = this.buildSessionId();
-    const today = this.istTimestamp().split('T')[0];
+const today = this.istTimestamp().split('T')[0];
 
     this.logFile = path.join(this.logDir, `test-run-${today}.log`);
-    this.jsonFile = path.join(this.logDir, `test-log-${this.sessionId}.json`);
 
     const envLevel = process.env.LOG_LEVEL?.toUpperCase() as LogLevel;
     this.currentLevel = LogLevel[envLevel] ? envLevel : LogLevel.DEBUG;
@@ -160,14 +143,6 @@ export class Logger {
     ].filter(Boolean).join('\n');
 
     this.print('HEADER', rows);
-
-    this.persistStructured({
-      timestamp: this.istTimestamp(),
-      level: 'TC_START',
-      tcId: ctx.testFile,
-      tcTitle: ctx.testName,
-      message: `TEST CASE START ► ${ctx.testName}`,
-    });
   }
 
   testEnd(status: 'passed' | 'failed' | 'skipped'): void {
@@ -192,15 +167,6 @@ export class Logger {
     ].join('\n');
 
     this.print(colorKey, msg);
-
-    this.persistStructured({
-      timestamp: this.istTimestamp(),
-      level: 'TC_END',
-      tcId: this.ctx.testFile,
-      tcTitle: this.ctx.testName,
-      durationMs,
-      message: `TEST CASE END ◄ ${this.ctx.testName} | Status: ${status.toUpperCase()}`,
-    });
 
     this.ctx = null;
     this.stepCount = 0;
@@ -241,17 +207,7 @@ export class Logger {
 
   async stepFail(page: Page, message: string): Promise<void> {
     const screenshotPath = await this.captureScreenshot(page, `fail-step${this.stepCount}`);
-
     this.output(LogLevel.FAIL, `✘ STEP FAILED: ${message}`);
-
-    this.persistStructured({
-      timestamp: this.istTimestamp(),
-      level: 'FAIL',
-      tcId: this.ctx?.testFile,
-      step: this.stepCount,
-      message: `✘ STEP FAILED: ${message}`,
-      screenshotPath,
-    });
   }
 
   static async stepInfo(message: string): Promise<void> {
@@ -311,16 +267,6 @@ export class Logger {
 
     console.log(`${C.WARN}[Screenshot] ${screenshotPath}${C.RESET}`);
     attachments.forEach(a => console.log(`${C.DEBUG}[Attachment] ${a}${C.RESET}`));
-
-    this.persistStructured({
-      timestamp: this.istTimestamp(),
-      level: 'FAIL',
-      tcId: this.ctx?.testFile,
-      step: this.stepCount,
-      message: `✘ FAILURE in [${methodName}]: ${errorMsg}`,
-      screenshotPath,
-      attachments,
-    });
   }
 
   debug(msg: string, data?: any) { this.output(LogLevel.DEBUG, msg, data); }
@@ -348,25 +294,22 @@ export class Logger {
   }
 
   private format(level: string, message: string, data?: any): string {
-    const ts = this.istTimestamp();
+    const ts = this.istTimestamp().replace('T', ' ');
     const prefix = PREFIX[level] ?? `[${level}]`;
     const details = data ? `\n${JSON.stringify(data, null, 2)}` : '';
     return `${ts} ${prefix} ${message}${details}`;
   }
 
+  private formatConsole(level: string, message: string, data?: any): string {
+    const prefix = PREFIX[level] ?? `[${level}]`;
+    const details = data ? `\n${JSON.stringify(data, null, 2)}` : '';
+    return `${prefix} ${message}${details}`;
+  }
+
   private output(level: LogLevel, message: string, data?: any): void {
     if (!this.shouldLog(level)) return;
-    const formatted = this.format(level, message, data);
-    console.log((C[level] ?? '') + formatted + C.RESET);
-    this.writeFile(formatted);
-
-    this.persistStructured({
-      timestamp: this.istTimestamp(),
-      level: level.toString(),
-      tcId: this.ctx?.testFile,
-      step: this.stepCount > 0 ? this.stepCount : undefined,
-      message,
-    });
+    console.log((C[level] ?? '') + this.formatConsole(level, message, data) + C.RESET);
+    this.writeFile(this.format(level, message, data));
   }
 
   private print(colorKey: string, message: string): void {
@@ -376,14 +319,6 @@ export class Logger {
 
   private writeFile(text: string): void {
     fs.appendFileSync(this.logFile, text + '\n');
-  }
-
-  private persistStructured(entry: LogEntry): void {
-    this.entries.push(entry);
-    try {
-      fs.writeFileSync(this.jsonFile, JSON.stringify(this.entries, null, 2));
-    } catch (e) {
-    }
   }
 }
 

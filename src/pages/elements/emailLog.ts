@@ -65,6 +65,19 @@ export class EmailLogElements {
     //     return this.named(`Email Log Row View Link: ${memberLastName}`,
     //         this.page.locator(`//tbody[@role="rowgroup"]//tr//td[@colspan="2"]//small[contains(text(),"${memberLastName}")]/../..//td[3]//small[contains(text()," Add Members Bulk") and span[text()="Notification Type:"]]/../..//td[5]//a[normalize-space(text()=" View")]`));
     // }
+    verifyEmailLogRowByLastNameWithAdditionRequest(lastName: string): Locator {
+        return this.named(`Email Log Row With Last Name And Addition Request: ${lastName}`,
+            this.page.locator(`//tbody[@role="rowgroup"]//tr//td[@colspan="2"]//small[contains(text(),"${lastName}") and contains(text(),"Addition Request")]`));
+    }
+    verifyEmailLogRowByLastNameWithAttachmentZero(lastName: string): Locator {
+        return this.named(`Email Log Row With Addition Request Attachment Zero: ${lastName}`,
+            this.page.locator(`//tr[.//small[span[text()="Subject: "] and contains(.,'${lastName}')]]//td[4]//small[contains(.,'Attachments:') and contains(.,'0')]`));
+    }
+    
+    verifyEmailDetailByLastNameWithToYopEmailLabel(toYopEmail: string): Locator {
+        return this.named(`Email Log Row To Yop Email: ${toYopEmail}`,
+            this.page.locator(`//tbody[@role="rowgroup"]//tr//td[@colspan="2"]//small[span[text()="To: "] and contains(text(),"${toYopEmail}")]`));
+    }
 
     get insurerBulkRequestEmailViewLink(): Locator {
         return this.named('Insurer Bulk Request Email View Link',
