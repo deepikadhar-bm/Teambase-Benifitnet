@@ -42,11 +42,29 @@ export class EmailLogPage extends BasePage {
         await this.click(this.emailLog.emailLogSearchButton);
     }
 
+    private async paginateToMemberRow(memberLastName: string): Promise<void> {
+        const MAX_PAGES = 20;
+        for (let pageNum = 1; pageNum <= MAX_PAGES; pageNum++) {
+            const found = await this.emailLog.emailLogRowViewLinkByMemberLastName(memberLastName).isVisible().catch(() => false);
+            if (found) return;
+            const nextBtn = this.emailLog.emailLogNextPageButton;
+            const nextVisible = await nextBtn.isVisible().catch(() => false);
+            if (!nextVisible) {
+                log.info(`No next page available — "${memberLastName}" not found after page ${pageNum}`);
+                return;
+            }
+            log.info(`"${memberLastName}" not on email log page ${pageNum} — navigating to next page`);
+            await this.click(nextBtn);
+            await this.page.waitForTimeout(500);
+        }
+    }
+
     /**
      * Action: Open Detailed Individual Member Email Transaction Log Entry
-     * Steps: Interacts dynamically with explicit row-view anchors mapped dynamically via matching text string tokens.
+     * Steps: Paginates through email log results until the member row is found, then opens the detail view.
      */
     async openMemberEmailLogDetail(memberLastName: string): Promise<void> {
+        await this.paginateToMemberRow(memberLastName);
         await this.click(this.emailLog.emailLogRowViewLinkByMemberLastName(memberLastName));
     }
 
@@ -70,10 +88,11 @@ export class EmailLogPage extends BasePage {
 
     /**
      * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-     * Steps: Asserts text visibility components for operational classifications, company designations, and associated policies.
+     * Steps: Paginates through results until the member row is found, then asserts visibility.
      */
     async assertEmailLogRowExistsForMember(clientName: string, policyName: string, memberLastName: string): Promise<void> {
         await this.isVisible(this.emailLog.emailLogNotificationTypeLabel);
+        await this.paginateToMemberRow(memberLastName);
         await this.isVisible(this.emailLog.emailLogClientNameCellByMemberLastName(memberLastName, clientName));
         await this.isVisible(this.emailLog.emailLogPolicyCellByMemberLastName(memberLastName, policyName));
     }
@@ -250,7 +269,7 @@ export class EmailLogPage extends BasePage {
      * Step Group: SG : EA : Download and Verify Inbound Mail Attachment Excel Structure Details
      * Steps: Allocates workspace download points, monitors file save sequences, handles empty assets checks, opens spreadsheet nodes via third-party parser engines, maps coordinate structures, and executes multi-column value asset validation routines.
      */
-    async downloadAndVerifyAttachmentExcel(capturedClientName: string, capturedMedicalPolicyName: string, runtime: { lastName: string; employeeNumber: string; email: string; nationalIdNumber: string }): Promise<void> {
+    async downloadAndVerifyAttachmentExcel(capturedClientName: string, capturedMedicalPolicyName: string, runtime: { lastName: string; employeeNumber: string; email: string; nationalIdNumber: string; maritalStatus?: string }): Promise<void> {
 
         const attachmentLink = this.emailLog.MemberAdditionBulkRequestMemberListAttachmentLink;
         await this.waitForElementIsVisible(attachmentLink);
@@ -315,8 +334,9 @@ export class EmailLogPage extends BasePage {
         expect(category).toContain('Cat A_');
         log.info(`Attachment — Relation: "${relation}"`);
         expect(relation).toBe('Principal');
-        log.info(`Attachment — Marital Status: "${maritalStatus}"`);
-        expect(maritalStatus).toBe('Married');
+        const expectedMaritalStatus = runtime.maritalStatus ?? 'Married';
+        log.info(`Attachment — Marital Status: "${maritalStatus}" | Expected: "${expectedMaritalStatus}"`);
+        expect(maritalStatus).toBe(expectedMaritalStatus);
         log.info(`Attachment — Nationality: "${nationality}"`);
         expect(nationality).toBe('India');
         log.info(`Attachment — National ID: "${nationalId}" | Expected to contain: "${runtime.nationalIdNumber}"`);

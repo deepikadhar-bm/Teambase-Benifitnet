@@ -176,4 +176,12 @@ export class EmailLogElements {
             this.page.locator(`//div[contains(@class,"file-box")]//a[contains(@href,".xlsx")]`));
     }
 
+    get emailLogNextPageButton(): Locator {
+        return this.named('Email Log Next Page Button',
+            this.page.locator(
+                `//li[contains(@class,"k-next-button") and not(contains(@class,"k-disabled"))]//a` +
+                ` | //a[@aria-label="Go to the next page" and not(ancestor::li[contains(@class,"k-disabled") or contains(@class,"disabled")])]`
+            ));
+    }
+
 }

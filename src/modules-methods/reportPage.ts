@@ -267,7 +267,7 @@ export class ReportPage extends BasePage {
      * Step Group: SG : CM : Verifying Column Details Inside Consolidated Membership List Row
      * Steps: Loads output spreadsheet data streams, maps localized multi-column indexing, parses dynamic row items, isolates record IDs, and runs structured verification assertions.
      */
-    async verifyConsolidatedExcelMemberRow(filePath: string, runtime: { firstName: string; lastName: string; employeeNumber: string; email: string; nationalIdNumber: string }, capturedMedicalPolicyName: string): Promise<void> {
+    async verifyConsolidatedExcelMemberRow(filePath: string, runtime: { firstName: string; lastName: string; employeeNumber: string; email: string; nationalIdNumber: string; maritalStatus?: string }, capturedMedicalPolicyName: string): Promise<void> {
         // Structure confirmed from file: Row 4 title | Row 5 date | Row 6 headers (57 cols) | Row 7+ data
         // Max row 10005 pre-allocated — scan col 1 (BenefitNet ID) to find last real row
         const workbook = await XlsxPopulate.fromFileAsync(filePath);
@@ -327,7 +327,8 @@ export class ReportPage extends BasePage {
         expect(employeeNo, `Employee Number mismatch`).toBe(runtime.employeeNumber);
         expect(email, `Email mismatch`).toBe(runtime.email);
         expect(nationality, `Nationality should be "India"`).toBe('India');
-        expect(maritalStatus, `Marital Status should be "Married"`).toBe('Married');
+        const expectedMaritalStatus = runtime.maritalStatus ?? 'Married';
+        expect(maritalStatus, `Marital Status should be "${expectedMaritalStatus}"`).toBe(expectedMaritalStatus);
         expect(relation, `Relation should be "Principal"`).toBe('Principal');
         expect(policy, `Policy mismatch`).toBe(capturedMedicalPolicyName);
         expect(category, `Category should contain "Cat A_"`).toContain('Cat A_');

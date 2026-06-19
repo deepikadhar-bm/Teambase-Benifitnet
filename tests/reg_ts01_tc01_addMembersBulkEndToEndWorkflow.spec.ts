@@ -434,6 +434,13 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                         }
                     }
 
+                    // Store picked dropdown values back into runtimeMembers so verification steps use the same values
+                    for (const field of randomizableDropdowns) {
+                        if (resolvedData[field] !== undefined) {
+                            runtimeMembers[i][field] = resolvedData[field];
+                        }
+                    }
+
                     log.info(`Member ${i + 1} Random dropdowns — maritalStatus: ${resolvedData.maritalStatus} | memberType: ${resolvedData.memberType} | subMemberType: ${resolvedData.subMemberType} | establishmentType: ${resolvedData.establishmentType} | commissionBased: ${resolvedData.commissionBased} | salaryBracket: ${resolvedData.salaryBracket} | salaryType: ${resolvedData.salaryType}`);
 
                     const round2ExcelRow = tdm.buildExcelRow(resolvedData);
