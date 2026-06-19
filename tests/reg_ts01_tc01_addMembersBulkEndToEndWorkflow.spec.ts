@@ -282,9 +282,10 @@ import { qaConfig } from 'src/config/env.qa';
 import { logger as log } from 'src/helpers/logger';
 import { testDataManager as tdm } from 'test-data/testDataManager';
 import { APP_CONSTANTS } from 'src/constant/app-constants';
+import { NUMBER_OF_MEMBERS, getGenderForMemberIndex, getProfileNameByGender, pickRandom, getDropdownValues } from 'src/config/memberGenerationConfig';
 
 const TC_ID = 'REG_TS01_TC01';
-const TC_TITLE = 'should add two principal members via bulk import and verify email notifications, attachment Excel, workflow logs report and consolidated membership report';
+const TC_TITLE = `should add ${NUMBER_OF_MEMBERS} principal members via bulk import and verify email notifications, attachment Excel, workflow logs report and consolidated membership report`;
 
 test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
 
@@ -300,7 +301,7 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
         reportPage = new ReportPage(page);
     });
 
-    test(TC_TITLE, async ({ page }) => {
+    test.only(TC_TITLE, async ({ page }) => {
 
         log.tcStart(TC_ID, TC_TITLE);
 
@@ -333,30 +334,40 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
             const capturedMedicalPolicyName = clientPage.capturedMedicalPolicyName;
             const policyCategory = `Cat A_ ${capturedMedicalPolicyName}`;
 
-            log.step('STEP 3: Generate runtime data for two members');
-            try {
-                const runtime1 = tdm.generateRuntimeDataForGender('Male');
-                const runtime2 = tdm.generateRuntimeDataForGender('Female');
-                log.info(`Member 1: ${runtime1.firstName} ${runtime1.lastName} | EmpNo: ${runtime1.employeeNumber} | UID: ${runtime1.uidNumber} | Passport: ${runtime1.passportNumber}`);
-                log.info(`Member 2: ${runtime2.firstName} ${runtime2.lastName} | EmpNo: ${runtime2.employeeNumber} | UID: ${runtime2.uidNumber} | Passport: ${runtime2.passportNumber}`);
-                log.stepPass('STEP 3: Runtime data generated for both members');
+            // Generate runtime data for all members dynamically
+            const runtimeMembers: any[] = [];
 
-                var runtime1Final = runtime1;
-                var runtime2Final = runtime2;
+            log.step(`STEP 3: Generate runtime data for ${NUMBER_OF_MEMBERS} members`);
+            try {
+                for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
+                    const gender = getGenderForMemberIndex(i);
+                    const runtimeData = tdm.generateRuntimeDataForGender(gender);
+                    runtimeMembers.push(runtimeData);
+                    log.info(`Member ${i + 1}: ${runtimeData.firstName} ${runtimeData.lastName} | Gender: ${gender} | EmpNo: ${runtimeData.employeeNumber} | UID: ${runtimeData.uidNumber} | Passport: ${runtimeData.passportNumber}`);
+                }
+                log.stepPass(`STEP 3: Runtime data generated for all ${NUMBER_OF_MEMBERS} members`);
             } catch (e) {
                 await log.stepFail(page, 'STEP 3: Failed to generate runtime data');
                 throw e;
             }
 
-            log.step('STEP 4: Round 1 — partial fill for both members to discover missing fields');
+            log.step('STEP 4: Round 1 — partial fill for all members to discover missing fields');
             try {
-                const round1Profile1 = tdm.getProfile('User Profile 1 - Male Principal Member (Round 1 Partial)');
-                const round1Profile2 = tdm.getProfile('User Profile 2 - Female Principal Member (Round 1 Partial)');
-                const round1ExcelRow1 = tdm.buildExcelRow(tdm.resolvePlaceholders(round1Profile1.memberData, runtime1Final, policyCategory));
-                const round1ExcelRow2 = tdm.buildExcelRow(tdm.resolvePlaceholders(round1Profile2.memberData, runtime2Final, policyCategory));
+                const round1ExcelRows: any[] = [];
+                
+                for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
+                    const gender = getGenderForMemberIndex(i);
+                    const profileName = getProfileNameByGender(gender, 1, 'Partial');
+                    
+                    const round1Profile = tdm.getProfile(profileName);
+                    const round1ExcelRow = tdm.buildExcelRow(
+                        tdm.resolvePlaceholders(round1Profile.memberData, runtimeMembers[i], policyCategory)
+                    );
+                    round1ExcelRows.push(round1ExcelRow);
+                }
 
                 const round1FilePath = await clientPage.downloadCensusSampleFile();
-                await clientPage.writeMultipleMembersToExcelFile(round1FilePath, [round1ExcelRow1, round1ExcelRow2]);
+                await clientPage.writeMultipleMembersToExcelFile(round1FilePath, round1ExcelRows);
                 await clientPage.uploadCensusExcelFile(round1FilePath);
                 await clientPage.selectImportTypeOption();
                 await clientPage.selectNotifyHrOption();
@@ -365,23 +376,28 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
 
                 const isNoHrWarningDisplayed = await clientPage.isNoHrUsersConfiguredWarningDisplayed();
                 const uiErrorsPerMember = await clientPage.getValidationErrorsPerMember();
-                const round1Result1 = uiErrorsPerMember.get(0);
-                const round1Result2 = uiErrorsPerMember.get(1);
-                const round1Errors1 = round1Result1?.allErrors ?? [];
-                const round1Errors2 = round1Result2?.allErrors ?? [];
+                
+                // Store all errors for each member
+                const round1ErrorsList: any[] = [];
+                for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
+                    const memberResult = uiErrorsPerMember.get(i);
+                    const memberErrors = memberResult?.allErrors ?? [];
+                    round1ErrorsList.push({
+                        memberIndex: i,
+                        memberResult: memberResult,
+                        allErrors: memberErrors
+                    });
+                    
+                    log.info(`Member ${i + 1} Round 1 required errors (${memberResult?.requiredFieldErrors.length ?? 0}): ${memberResult?.requiredFieldErrors.join(', ')}`);
+                    log.info(`Member ${i + 1} Round 1 invalid fields  (${memberResult?.invalidFieldErrors.length ?? 0}): ${memberResult?.invalidFieldErrors.join(', ')}`);
+                    log.info(`Member ${i + 1} Round 1 warnings        (${memberResult?.warnings.length ?? 0}): ${memberResult?.warnings.join(' | ')}`);
+                }
+                
+                log.stepPass(`STEP 4: Round 1 validation completed — missing fields discovered for all ${NUMBER_OF_MEMBERS} members`);
 
-                log.info(`Member 1 Round 1 required errors (${round1Result1?.requiredFieldErrors.length ?? 0}): ${round1Result1?.requiredFieldErrors.join(', ')}`);
-                log.info(`Member 1 Round 1 invalid fields  (${round1Result1?.invalidFieldErrors.length ?? 0}): ${round1Result1?.invalidFieldErrors.join(', ')}`);
-                log.info(`Member 1 Round 1 warnings        (${round1Result1?.warnings.length ?? 0}): ${round1Result1?.warnings.join(' | ')}`);
-                log.info(`Member 2 Round 1 required errors (${round1Result2?.requiredFieldErrors.length ?? 0}): ${round1Result2?.requiredFieldErrors.join(', ')}`);
-                log.info(`Member 2 Round 1 invalid fields  (${round1Result2?.invalidFieldErrors.length ?? 0}): ${round1Result2?.invalidFieldErrors.join(', ')}`);
-                log.info(`Member 2 Round 1 warnings        (${round1Result2?.warnings.length ?? 0}): ${round1Result2?.warnings.join(' | ')}`);
-                log.stepPass('STEP 4: Round 1 validation completed — missing fields discovered');
-
-                var uiErrorsPerMemberFinal = uiErrorsPerMember;
-                var round1Errors1Final = round1Errors1;
-                var round1Errors2Final = round1Errors2;
+                var round1ErrorsListFinal = round1ErrorsList;
                 var isNoHrWarningDisplayedFinal = isNoHrWarningDisplayed;
+                var round1ExcelRowsFinal = round1ExcelRows;
             } catch (e) {
                 await log.stepFail(page, 'STEP 4: Round 1 validation failed unexpectedly');
                 throw e;
@@ -391,16 +407,45 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
             try {
                 await clientPage.clickBackToImportLink();
 
-                const round2Profile1 = tdm.getProfile('User Profile 1 - Male Principal Member (Round 2 Full)');
-                const round2Profile2 = tdm.getProfile('User Profile 2 - Female Principal Member (Round 2 Full)');
-                const round2ExcelRow1 = tdm.buildExcelRow(tdm.resolvePlaceholders(round2Profile1.memberData, runtime1Final, policyCategory));
-                const round2ExcelRow2 = tdm.buildExcelRow(tdm.resolvePlaceholders(round2Profile2.memberData, runtime2Final, policyCategory));
+                const round2ExcelRows: any[] = [];
+                const allRound1Errors: any[] = [];
+                
+                for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
+                    const gender = getGenderForMemberIndex(i);
+                    const profileName = getProfileNameByGender(gender, 2, 'Full');
 
-                log.info(`Member 1 Round 2 — writing ${Object.keys(round2ExcelRow1).length} columns`);
-                log.info(`Member 2 Round 2 — writing ${Object.keys(round2ExcelRow2).length} columns`);
+                    const round2Profile = tdm.getProfile(profileName);
+                    const resolvedData: any = tdm.resolvePlaceholders(round2Profile.memberData, runtimeMembers[i], policyCategory);
+
+                    // Randomly pick from dropdown allowedValues for non-interdependent fields
+                    const randomizableDropdowns = [
+                        'maritalStatus',
+                        'memberType',
+                        'subMemberType',
+                        'establishmentType',
+                        'commissionBased',
+                        'salaryBracket',
+                        'salaryType',
+                    ];
+                    for (const field of randomizableDropdowns) {
+                        const values = getDropdownValues(field);
+                        if (values.length > 0) {
+                            resolvedData[field] = pickRandom(values);
+                        }
+                    }
+
+                    log.info(`Member ${i + 1} Random dropdowns — maritalStatus: ${resolvedData.maritalStatus} | memberType: ${resolvedData.memberType} | subMemberType: ${resolvedData.subMemberType} | establishmentType: ${resolvedData.establishmentType} | commissionBased: ${resolvedData.commissionBased} | salaryBracket: ${resolvedData.salaryBracket} | salaryType: ${resolvedData.salaryType}`);
+
+                    const round2ExcelRow = tdm.buildExcelRow(resolvedData);
+                    round2ExcelRows.push(round2ExcelRow);
+                    log.info(`Member ${i + 1} Round 2 — writing ${Object.keys(round2ExcelRow).length} columns`);
+                    
+                    // Collect all errors for assertion
+                    allRound1Errors.push(...(round1ErrorsListFinal[i]?.allErrors ?? []));
+                }
 
                 const round2FilePath = await clientPage.downloadCensusSampleFile();
-                await clientPage.writeMultipleMembersToExcelFile(round2FilePath, [round2ExcelRow1, round2ExcelRow2]);
+                await clientPage.writeMultipleMembersToExcelFile(round2FilePath, round2ExcelRows);
                 await clientPage.uploadCensusExcelFile(round2FilePath);
                 await clientPage.selectImportTypeOption();
 
@@ -413,9 +458,9 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                 await clientPage.selectNotifyMemberOption();
                 await clientPage.clickValidateImportButton();
 
-                await clientPage.assertPreviousValidationErrorsAreResolved([...round1Errors1Final, ...round1Errors2Final]);
+                await clientPage.assertPreviousValidationErrorsAreResolved(allRound1Errors);
                 await clientPage.handleValidationOutcomeAndProceedToImport();
-                log.stepPass('STEP 5: Round 2 validation passed — all mandatory fields resolved');
+                log.stepPass(`STEP 5: Round 2 validation passed — all mandatory fields resolved for all ${NUMBER_OF_MEMBERS} members`);
             } catch (e) {
                 await log.stepFail(page, 'STEP 5: Round 2 re-validation failed');
                 throw e;
@@ -424,53 +469,48 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
             log.step('STEP 6: Assert import processing and success');
             try {
                 await clientPage.assertAddMembersBulkProcessingAndSuccess();
-                log.stepPass('STEP 6: Bulk import completed successfully for both members');
+                log.stepPass(`STEP 6: Bulk import completed successfully for all ${NUMBER_OF_MEMBERS} members`);
             } catch (e) {
                 await log.stepFail(page, 'STEP 6: Bulk import processing did not reach success state');
                 throw e;
             }
 
-            log.step('STEP 7: Verify member 1 notification email');
+            log.step(`STEP 7: Verify notification emails for all ${NUMBER_OF_MEMBERS} members`);
             try {
                 await emailLogPage.navigateToEmailLogs();
                 await emailLogPage.filterEmailLogsByClientAndPolicy();
-                await emailLogPage.assertEmailLogRowExistsForMember(capturedClientName, capturedMedicalPolicyName, runtime1Final.lastName);
-                await emailLogPage.openMemberEmailLogDetail(runtime1Final.lastName);
-                await emailLogPage.assertEmailDetailHeadingIsVisible();
-                await emailLogPage.assertEmailDetailSubjectContainsMemberName(runtime1Final.lastName);
-                await emailLogPage.assertEmailDetailRequestSubmittedToInsurer();
-                await emailLogPage.assertEmailDetailCompanyName(capturedClientName);
-                await emailLogPage.assertEmailDetailInsurer(APP_CONSTANTS.TESTINSURER);
-                await emailLogPage.assertEmailDetailPolicyName(capturedMedicalPolicyName);
-                await emailLogPage.assertEmailDetailPolicyCategory(policyCategory);
-                await emailLogPage.assertEmailDetailEmployeeNumber(runtime1Final.employeeNumber);
-                log.stepPass('STEP 7: Member 1 notification email verified');
+                
+                for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
+                    const member = runtimeMembers[i];
+                    
+                    log.info(`--- Verifying Member ${i + 1} email: ${member.lastName} ---`);
+                    await emailLogPage.assertEmailLogRowExistsForMember(capturedClientName, capturedMedicalPolicyName, member.lastName);
+                    await emailLogPage.openMemberEmailLogDetail(member.lastName);
+                    await emailLogPage.assertEmailDetailHeadingIsVisible();
+                    await emailLogPage.assertEmailDetailSubjectContainsMemberName(member.lastName);
+                    await emailLogPage.assertEmailDetailRequestSubmittedToInsurer();
+                    await emailLogPage.assertEmailDetailCompanyName(capturedClientName);
+                    await emailLogPage.assertEmailDetailInsurer(APP_CONSTANTS.TESTINSURER);
+                    await emailLogPage.assertEmailDetailPolicyName(capturedMedicalPolicyName);
+                    await emailLogPage.assertEmailDetailPolicyCategory(policyCategory);
+                    await emailLogPage.assertEmailDetailEmployeeNumber(member.employeeNumber);
+                    
+                    log.stepPass(`Member ${i + 1} notification email verified`);
+                    
+                    // Go back to list for next member (except for last member)
+                    if (i < NUMBER_OF_MEMBERS - 1) {
+                        await emailLogPage.clickBackToList();
+                        await emailLogPage.filterEmailLogsByClientAndPolicy();
+                    }
+                }
+                
+                log.stepPass(`STEP 7: All ${NUMBER_OF_MEMBERS} member notification emails verified`);
             } catch (e) {
-                await log.stepFail(page, 'STEP 7: Member 1 notification email verification failed');
+                await log.stepFail(page, `STEP 7: Member notification email verification failed`);
                 throw e;
             }
 
-            log.step('STEP 8: Verify member 2 notification email');
-            try {
-                await emailLogPage.clickBackToList();
-                await emailLogPage.filterEmailLogsByClientAndPolicy();
-                await emailLogPage.assertEmailLogRowExistsForMember(capturedClientName, capturedMedicalPolicyName, runtime2Final.lastName);
-                await emailLogPage.openMemberEmailLogDetail(runtime2Final.lastName);
-                await emailLogPage.assertEmailDetailHeadingIsVisible();
-                await emailLogPage.assertEmailDetailSubjectContainsMemberName(runtime2Final.lastName);
-                await emailLogPage.assertEmailDetailRequestSubmittedToInsurer();
-                await emailLogPage.assertEmailDetailCompanyName(capturedClientName);
-                await emailLogPage.assertEmailDetailInsurer(APP_CONSTANTS.TESTINSURER);
-                await emailLogPage.assertEmailDetailPolicyName(capturedMedicalPolicyName);
-                await emailLogPage.assertEmailDetailPolicyCategory(policyCategory);
-                await emailLogPage.assertEmailDetailEmployeeNumber(runtime2Final.employeeNumber);
-                log.stepPass('STEP 8: Member 2 notification email verified');
-            } catch (e) {
-                await log.stepFail(page, 'STEP 8: Member 2 notification email verification failed');
-                throw e;
-            }
-
-            log.step('STEP 9: Verify insurer bulk request email and attachment Excel');
+            log.step('STEP 8: Verify insurer bulk request email and attachment Excel');
             try {
                 await emailLogPage.clickBackToList();
                 await emailLogPage.filterEmailLogsByClientAndPolicy();
@@ -482,14 +522,14 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                 await emailLogPage.assertEmailDetailMembersAdditionBulkRequestInsurer(APP_CONSTANTS.TESTINSURER);
                 await emailLogPage.assertEmailDetailMembersAdditionBulkRequestPolicyName(capturedMedicalPolicyName);
                 await emailLogPage.assertAttachmentFileNameContains(APP_CONSTANTS.ATTACHMENTMEMBERLIST);
-                await emailLogPage.downloadAndVerifyAttachmentExcel(capturedClientName, capturedMedicalPolicyName, runtime1Final);
-                log.stepPass('STEP 9: Insurer bulk request email and attachment Excel verified');
+                await emailLogPage.downloadAndVerifyAttachmentExcel(capturedClientName, capturedMedicalPolicyName, runtimeMembers[0]);
+                log.stepPass('STEP 8: Insurer bulk request email and attachment Excel verified');
             } catch (e) {
-                await log.stepFail(page, 'STEP 9: Insurer bulk request email verification failed');
+                await log.stepFail(page, 'STEP 8: Insurer bulk request email verification failed');
                 throw e;
             }
 
-            log.step('STEP 10: Verify workflow logs report for both members');
+            log.step(`STEP 9: Verify workflow logs report for all ${NUMBER_OF_MEMBERS} members`);
             try {
                 await reportPage.navigateToReports();
                 await reportPage.openWorkflowLogsReport();
@@ -498,15 +538,20 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                 await reportPage.selectWorkflowCategory();
                 await reportPage.clickSearch();
                 const workflowExcelPath = await reportPage.exportWorkflowToExcel();
-                await reportPage.verifyWorkflowExcelMemberRow(workflowExcelPath, runtime1Final, capturedClientName, capturedMedicalPolicyName);
-                await reportPage.verifyWorkflowExcelMemberRow(workflowExcelPath, runtime2Final, capturedClientName, capturedMedicalPolicyName);
-                log.stepPass('STEP 10: Workflow logs report verified for both members');
+                
+                for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
+                    const member = runtimeMembers[i];
+                    log.info(`Verifying Member ${i + 1} in workflow report: ${member.lastName}`);
+                    await reportPage.verifyWorkflowExcelMemberRow(workflowExcelPath, member, capturedClientName, capturedMedicalPolicyName);
+                }
+                
+                log.stepPass(`STEP 9: Workflow logs report verified for all ${NUMBER_OF_MEMBERS} members`);
             } catch (e) {
-                await log.stepFail(page, 'STEP 10: Workflow logs report verification failed');
+                await log.stepFail(page, 'STEP 9: Workflow logs report verification failed');
                 throw e;
             }
 
-            log.step('STEP 11: Verify consolidated membership report for both members');
+            log.step(`STEP 10: Verify consolidated membership report for all ${NUMBER_OF_MEMBERS} members`);
             try {
                 await reportPage.navigateToReports();
                 await reportPage.openConsolidatedMembershipReport();
@@ -516,20 +561,25 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                 await reportPage.selectConsolidatedCategory();
                 await reportPage.clickSearch();
                 const consolidatedExcelPath = await reportPage.exportConsolidatedToExcel();
-                await reportPage.verifyConsolidatedExcelMemberRow(consolidatedExcelPath, runtime1Final, capturedMedicalPolicyName);
-                await reportPage.verifyConsolidatedExcelMemberRow(consolidatedExcelPath, runtime2Final, capturedMedicalPolicyName);
-                log.stepPass('STEP 11: Consolidated membership report verified for both members');
+                
+                for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
+                    const member = runtimeMembers[i];
+                    log.info(`Verifying Member ${i + 1} in consolidated report: ${member.lastName}`);
+                    await reportPage.verifyConsolidatedExcelMemberRow(consolidatedExcelPath, member, capturedMedicalPolicyName);
+                }
+                
+                log.stepPass(`STEP 10: Consolidated membership report verified for all ${NUMBER_OF_MEMBERS} members`);
             } catch (e) {
-                await log.stepFail(page, 'STEP 11: Consolidated membership report verification failed');
+                await log.stepFail(page, 'STEP 10: Consolidated membership report verification failed');
                 throw e;
             }
 
-            log.step('STEP 12: Logout');
+            log.step('STEP 11: Logout');
             try {
                 await loginPage.logout();
-                log.stepPass('STEP 12: Logout Successful');
+                log.stepPass('STEP 11: Logout Successful');
             } catch (e) {
-                await log.stepFail(page, 'STEP 12: Logout failed');
+                await log.stepFail(page, 'STEP 11: Logout failed');
                 throw e;
             }
 

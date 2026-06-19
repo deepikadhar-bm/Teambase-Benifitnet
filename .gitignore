@@ -83,3 +83,6 @@ desktop.ini
 /playwright/.cache/
 /playwright/.auth/
 downloads/
+
+# Playwright
+/playwright-report/
