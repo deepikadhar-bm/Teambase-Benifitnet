@@ -1173,16 +1173,21 @@ export class FileUtils {
     fs.copyFileSync(filePath, copyPath);
     logger.info(`[ExcelStep ${count}] "${stepLabel}" → saved: ${copyName}`);
 
-    // ── 4. Read current rows ─────────────────────────────────────────────────
+    // ── 4. Read current rows (skipped for large report exports > 100KB) ──────
     let currentRows: Array<Record<string, unknown>> = [];
-    try {
-      const raw = await FileUtils.readExcel(filePath, sheetName);
-      currentRows = raw as Array<Record<string, unknown>>;
-    } catch (error) {
-      logger.warn(
-        `[ExcelStep ${count}] Could not read rows for diff — ` +
-        `${error instanceof Error ? error.message : String(error)}`
-      );
+    const fileSizeKb = fs.statSync(filePath).size / 1024;
+    if (fileSizeKb <= 100) {
+      try {
+        const raw = await FileUtils.readExcel(filePath, sheetName);
+        currentRows = raw as Array<Record<string, unknown>>;
+      } catch (error) {
+        logger.warn(
+          `[ExcelStep ${count}] Could not read rows for diff — ` +
+          `${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    } else {
+      logger.info(`[ExcelStep ${count}] Diff skipped — large report file (${fileSizeKb.toFixed(1)} KB), snapshot saved only`);
     }
 
     // ── 5. Diff against previous snapshot ───────────────────────────────────

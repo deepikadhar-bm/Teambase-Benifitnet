@@ -63,10 +63,12 @@ export class ClientPage extends BasePage {
     async openAddMembersBulkForm(): Promise<void> {
         if (await this.assertElementVisible(this.clientPageElements.addMembersBulkButton)) {
             await this.waitForElementIsVisible(this.clientPageElements.addMembersBulkButton);
+            await this.hover(this.clientPageElements.addMembersBulkButton);
             await this.click(this.clientPageElements.addMembersBulkButton);
             await this.waitForElementIsVisible(this.clientPageElements.downloadSampleFileLink);
         } else {
             await this.waitForElementIsVisible(this.clientPageElements.addMembersBulkButton);
+            await this.hover(this.clientPageElements.addMembersBulkButton);
             await this.click(this.clientPageElements.addMembersBulkButton);
             await this.waitForElementIsVisible(this.clientPageElements.downloadSampleFileLink);
         }
