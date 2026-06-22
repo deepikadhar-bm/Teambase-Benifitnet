@@ -33,37 +33,37 @@
 //   29. clearExcelStepHistory  — reset step history for a TC (call in afterAll)
 // ============================================================================
 
-import * as fs   from "fs";
+import * as fs from "fs";
 import * as path from "path";
-import ExcelJS   from "exceljs";
+import ExcelJS from "exceljs";
 import { parse } from "csv-parse/sync";
-import * as fse  from "fs-extra";
+import * as fse from "fs-extra";
 import { Locator } from "@playwright/test";
-import { logger }  from "./logger";
+import { logger } from "./logger";
 
-export type ColumnType   = "string" | "number" | "date" | "email" | "boolean";
+export type ColumnType = "string" | "number" | "date" | "email" | "boolean";
 export interface ColumnSchema { name: string; type: ColumnType; required?: boolean; }
-export type MatchType    = "exact" | "contains" | "regex";
+export type MatchType = "exact" | "contains" | "regex";
 export type LocationType = "near-label" | "anywhere" | "auto";
 
 export interface BillField {
-  label:     string;
-  amount?:   string;
-  text?:     string;
-  match?:    MatchType;
+  label: string;
+  amount?: string;
+  text?: string;
+  match?: MatchType;
   location?: LocationType;
   currency?: string;
 }
 
 export interface BillFieldResult extends BillField {
-  found:        boolean;
+  found: boolean;
   matchedValue: string;
-  matchedLine:  string;
-  lineNumber:   number;
-  strategy:     string;
-  confidence:   "high" | "medium" | "low";
-  fieldType:    "amount" | "text";
-  reason?:      string;
+  matchedLine: string;
+  lineNumber: number;
+  strategy: string;
+  confidence: "high" | "medium" | "low";
+  fieldType: "amount" | "text";
+  reason?: string;
 }
 
 export interface PdfBillResult {
@@ -89,15 +89,15 @@ export interface ColumnError {
 // ── Internal type for Excel step snapshots ────────────────────────────────────
 interface ExcelStepSnapshot {
   label: string;
-  rows:  Array<Record<string, unknown>>;
+  rows: Array<Record<string, unknown>>;
 }
 
-const MASTER_REPORT_DIR  = path.join(process.cwd(), "test-results", "download-reports");
+const MASTER_REPORT_DIR = path.join(process.cwd(), "test-results", "download-reports");
 const MASTER_REPORT_FILE = path.join(MASTER_REPORT_DIR, "master-download-report.xlsx");
-const SEPARATORS         = [":", "₹", "Rs.", "Rs ", "INR", "/-", "=", "–", "-"];
-const PROXIMITY          = 3;
-const MONEY_PATTERN      = /(?:₹|Rs\.?|INR)?\s*[\d,]+(?:\.\d{1,2})?/g;
-const SEP                = "─".repeat(80);
+const SEPARATORS = [":", "₹", "Rs.", "Rs ", "INR", "/-", "=", "–", "-"];
+const PROXIMITY = 3;
+const MONEY_PATTERN = /(?:₹|Rs\.?|INR)?\s*[\d,]+(?:\.\d{1,2})?/g;
+const SEP = "─".repeat(80);
 
 function logHeader(title: string, fileName: string): void {
   logger.info("");
@@ -128,7 +128,7 @@ export class FileUtils {
 
   // EXCEL STEP CAPTURE state
   private static readonly stepHistory: Map<string, ExcelStepSnapshot[]> = new Map();
-  private static readonly stepCounter: Map<string, number>              = new Map();
+  private static readonly stepCounter: Map<string, number> = new Map();
 
   // ==========================================================================
   // 1. clickAndVerifyDownload
@@ -137,17 +137,17 @@ export class FileUtils {
     element: Locator,
     expectedExtension: string,
     options?: {
-      keywords?:    string[];
-      schema?:      ColumnSchema[];
-      saveFolder?:  string;
-      timeout?:     number;
-      testInfo?:    any;
+      keywords?: string[];
+      schema?: ColumnSchema[];
+      saveFolder?: string;
+      timeout?: number;
+      testInfo?: any;
       writeReport?: boolean;
     }
   ): Promise<VerifyResult> {
     const saveFolder = options?.saveFolder ?? path.join(process.cwd(), "test-results", "downloads");
-    const timeout    = options?.timeout ?? 30_000;
-    const ext        = expectedExtension.startsWith(".")
+    const timeout = options?.timeout ?? 30_000;
+    const ext = expectedExtension.startsWith(".")
       ? expectedExtension.toLowerCase()
       : `.${expectedExtension.toLowerCase()}`;
 
@@ -163,9 +163,9 @@ export class FileUtils {
           page.waitForEvent("download", { timeout: attempt === 1 ? timeout : timeout / 2 }),
           element.click(),
         ]);
-        fileName  = download.suggestedFilename();
+        fileName = download.suggestedFilename();
         actualExt = path.extname(fileName).toLowerCase();
-        filePath  = path.join(saveFolder, fileName);
+        filePath = path.join(saveFolder, fileName);
         await download.saveAs(filePath);
         if (!fs.existsSync(filePath)) throw new Error(`File not found after save`);
         const bytes = fs.statSync(filePath).size;
@@ -191,11 +191,11 @@ export class FileUtils {
     let result: VerifyResult;
     switch (ext) {
       case ".xlsx": case ".xls": result = await this.verifyExcel(filePath, options); break;
-      case ".pdf":               result = await this.verifyPdf(filePath, options);   break;
-      case ".docx":              result = await this.verifyDocx(filePath, options);  break;
-      case ".csv":               result = await this.verifyCsv(filePath, options);   break;
-      case ".txt":               result = await this.verifyTxt(filePath, options);   break;
-      default:                   result = this.buildResult(filePath, ext, true, [], [], options?.testInfo);
+      case ".pdf": result = await this.verifyPdf(filePath, options); break;
+      case ".docx": result = await this.verifyDocx(filePath, options); break;
+      case ".csv": result = await this.verifyCsv(filePath, options); break;
+      case ".txt": result = await this.verifyTxt(filePath, options); break;
+      default: result = this.buildResult(filePath, ext, true, [], [], options?.testInfo);
     }
 
     result.downloaded = true;
@@ -212,10 +212,10 @@ export class FileUtils {
   static async verifyExcel(
     filePath: string,
     options?: {
-      keywords?:    string[];
-      schema?:      ColumnSchema[];
-      sheetName?:   string;
-      testInfo?:    any;
+      keywords?: string[];
+      schema?: ColumnSchema[];
+      sheetName?: string;
+      testInfo?: any;
       writeReport?: boolean;
     }
   ): Promise<VerifyResult> {
@@ -233,7 +233,7 @@ export class FileUtils {
       if (!sheet) return this.fail(filePath, `Sheet not found: ${options?.sheetName}`);
 
       const headers: string[] = [];
-      const rows: any[]       = [];
+      const rows: any[] = [];
 
       sheet.eachRow((row, rowIndex) => {
         if (rowIndex === 1) {
@@ -247,12 +247,12 @@ export class FileUtils {
         rows.push(rowData);
       });
 
-      const allText      = [...headers, ...rows.flatMap(r => Object.values(r).map(v => String(v ?? "")))].join(" ");
+      const allText = [...headers, ...rows.flatMap(r => Object.values(r).map(v => String(v ?? "")))].join(" ");
       const missingWords = this.findMissing(options?.keywords, allText);
       const columnErrors = this.validateSchema(rows, options?.schema);
-      const result       = this.buildResult(filePath, ".xlsx", true, missingWords, columnErrors, options?.testInfo);
+      const result = this.buildResult(filePath, ".xlsx", true, missingWords, columnErrors, options?.testInfo);
       result.rowCount = rows.length;
-      result.content  = rows;
+      result.content = rows;
 
       logHeader("EXCEL VERIFICATION", path.basename(filePath));
       logger.info(`File Name  : ${result.fileName}`);
@@ -293,14 +293,14 @@ export class FileUtils {
       }
 
       logger.info(SEP);
-      const kwPass  = missingWords.length === 0;
+      const kwPass = missingWords.length === 0;
       const colPass = columnErrors.length === 0;
       if (kwPass && colPass) {
         logFooterPass(`RESULT : PASS   |  Rows: ${rows.length}  |  Keywords: ${keywords.length}/${keywords.length}  |  Columns: valid`);
       } else {
         logFooterFail(
           `RESULT : FAIL   |  ` +
-          (!kwPass  ? `Missing keywords: ${missingWords.join(", ")}  |  ` : "") +
+          (!kwPass ? `Missing keywords: ${missingWords.join(", ")}  |  ` : "") +
           (!colPass ? `Column errors: ${columnErrors.length}` : "")
         );
       }
@@ -326,15 +326,15 @@ export class FileUtils {
     logger.step(`Verify PDF → ${path.basename(filePath)}`);
 
     try {
-      const pdfParse  = require("pdf-parse");
-      const data      = await pdfParse(fs.readFileSync(filePath));
-      const text      = data.text?.trim() ?? "";
+      const pdfParse = require("pdf-parse");
+      const data = await pdfParse(fs.readFileSync(filePath));
+      const text = data.text?.trim() ?? "";
       const pageCount = data.numpages ?? 0;
 
       const missingWords = this.findMissing(options?.keywords, text);
-      const result       = this.buildResult(filePath, ".pdf", true, missingWords, [], options?.testInfo);
-      result.pageCount   = pageCount;
-      result.text        = text;
+      const result = this.buildResult(filePath, ".pdf", true, missingWords, [], options?.testInfo);
+      result.pageCount = pageCount;
+      result.text = text;
 
       const keywords = options?.keywords ?? [];
       logHeader("PDF VERIFICATION", path.basename(filePath));
@@ -346,8 +346,8 @@ export class FileUtils {
 
       let passed = 0, failed = 0;
       keywords.forEach((kw, idx) => {
-        const found   = text.toLowerCase().includes(kw.toLowerCase());
-        const kwIdx   = found ? text.toLowerCase().indexOf(kw.toLowerCase()) : -1;
+        const found = text.toLowerCase().includes(kw.toLowerCase());
+        const kwIdx = found ? text.toLowerCase().indexOf(kw.toLowerCase()) : -1;
         const preview = found
           ? text.substring(Math.max(0, kwIdx - 30), Math.min(text.length, kwIdx + kw.length + 30)).replace(/\n/g, " ")
           : "";
@@ -370,10 +370,10 @@ export class FileUtils {
       if (options?.writeReport && options?.testInfo) {
         await this.writeExcelAuto(options.testInfo,
           keywords.map(kw => ({
-            Keyword:  kw,
+            Keyword: kw,
             Expected: kw,
-            Actual:   text.toLowerCase().includes(kw.toLowerCase()) ? kw : "NOT FOUND",
-            Result:   text.toLowerCase().includes(kw.toLowerCase()) ? "PASS" : "FAIL",
+            Actual: text.toLowerCase().includes(kw.toLowerCase()) ? kw : "NOT FOUND",
+            Result: text.toLowerCase().includes(kw.toLowerCase()) ? "PASS" : "FAIL",
           }))
         );
       }
@@ -400,10 +400,10 @@ export class FileUtils {
 
     try {
       const mammoth = require("mammoth");
-      const res     = await mammoth.extractRawText({ path: filePath });
-      const text    = res.value?.trim() ?? "";
+      const res = await mammoth.extractRawText({ path: filePath });
+      const text = res.value?.trim() ?? "";
       const missingWords = this.findMissing(options?.keywords, text);
-      const result       = this.buildResult(filePath, ".docx", true, missingWords, [], options?.testInfo);
+      const result = this.buildResult(filePath, ".docx", true, missingWords, [], options?.testInfo);
       result.text = text;
 
       const keywords = options?.keywords ?? [];
@@ -416,8 +416,8 @@ export class FileUtils {
 
       let passed = 0, failed = 0;
       keywords.forEach((kw, idx) => {
-        const found   = text.toLowerCase().includes(kw.toLowerCase());
-        const kwIdx   = found ? text.toLowerCase().indexOf(kw.toLowerCase()) : -1;
+        const found = text.toLowerCase().includes(kw.toLowerCase());
+        const kwIdx = found ? text.toLowerCase().indexOf(kw.toLowerCase()) : -1;
         const preview = found
           ? text.substring(Math.max(0, kwIdx - 30), Math.min(text.length, kwIdx + kw.length + 30)).replace(/\n/g, " ")
           : "";
@@ -440,10 +440,10 @@ export class FileUtils {
       if (options?.writeReport && options?.testInfo) {
         await this.writeExcelAuto(options.testInfo,
           keywords.map(kw => ({
-            Keyword:  kw,
+            Keyword: kw,
             Expected: kw,
-            Actual:   text.toLowerCase().includes(kw.toLowerCase()) ? kw : "NOT FOUND",
-            Result:   text.toLowerCase().includes(kw.toLowerCase()) ? "PASS" : "FAIL",
+            Actual: text.toLowerCase().includes(kw.toLowerCase()) ? kw : "NOT FOUND",
+            Result: text.toLowerCase().includes(kw.toLowerCase()) ? "PASS" : "FAIL",
           }))
         );
       }
@@ -469,16 +469,16 @@ export class FileUtils {
     logger.step(`Verify CSV → ${path.basename(filePath)}`);
 
     try {
-      const rows         = parse(fs.readFileSync(filePath, "utf-8"), { columns: true, skip_empty_lines: true, trim: true }) as any[];
-      const allText      = rows.flatMap(r => Object.values(r).map(v => String(v ?? ""))).join(" ");
+      const rows = parse(fs.readFileSync(filePath, "utf-8"), { columns: true, skip_empty_lines: true, trim: true }) as any[];
+      const allText = rows.flatMap(r => Object.values(r).map(v => String(v ?? ""))).join(" ");
       const missingWords = this.findMissing(options?.keywords, allText);
       const columnErrors = this.validateSchema(rows, options?.schema);
-      const result       = this.buildResult(filePath, ".csv", true, missingWords, columnErrors, options?.testInfo);
-      result.rowCount    = rows.length;
-      result.content     = rows;
+      const result = this.buildResult(filePath, ".csv", true, missingWords, columnErrors, options?.testInfo);
+      result.rowCount = rows.length;
+      result.content = rows;
 
       const keywords = options?.keywords ?? [];
-      const headers  = rows.length > 0 ? Object.keys(rows[0]) : [];
+      const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
       logHeader("CSV VERIFICATION", path.basename(filePath));
       logger.info(`File Name  : ${result.fileName}`);
       logger.info(`File Size  : ${result.fileSize}`);
@@ -524,7 +524,7 @@ export class FileUtils {
       } else {
         logFooterFail(
           `RESULT : FAIL   |  ` +
-          (kwFailed > 0        ? `Missing keywords: ${missingWords.join(", ")}  |  ` : "") +
+          (kwFailed > 0 ? `Missing keywords: ${missingWords.join(", ")}  |  ` : "") +
           (columnErrors.length > 0 ? `Column errors: ${columnErrors.length}` : "")
         );
       }
@@ -550,13 +550,13 @@ export class FileUtils {
     logger.step(`Verify TXT → ${path.basename(filePath)}`);
 
     try {
-      const text         = fs.readFileSync(filePath, "utf-8").trim();
+      const text = fs.readFileSync(filePath, "utf-8").trim();
       const missingWords = this.findMissing(options?.keywords, text);
-      const result       = this.buildResult(filePath, ".txt", true, missingWords, [], options?.testInfo);
-      result.text        = text;
+      const result = this.buildResult(filePath, ".txt", true, missingWords, [], options?.testInfo);
+      result.text = text;
 
       const keywords = options?.keywords ?? [];
-      const lines    = text.split("\n").filter(Boolean);
+      const lines = text.split("\n").filter(Boolean);
       logHeader("TXT VERIFICATION", path.basename(filePath));
       logger.info(`File Name  : ${result.fileName}`);
       logger.info(`File Size  : ${result.fileSize}`);
@@ -566,8 +566,8 @@ export class FileUtils {
 
       let passed = 0, failed = 0;
       keywords.forEach((kw, idx) => {
-        const found       = text.toLowerCase().includes(kw.toLowerCase());
-        const lineNo      = found ? lines.findIndex(l => l.toLowerCase().includes(kw.toLowerCase())) + 1 : -1;
+        const found = text.toLowerCase().includes(kw.toLowerCase());
+        const lineNo = found ? lines.findIndex(l => l.toLowerCase().includes(kw.toLowerCase())) + 1 : -1;
         const matchedLine = lineNo > 0 ? lines[lineNo - 1].trim() : "";
         logger.info(`${String(idx + 1).padStart(2, "0")}. Keyword Check`);
         logger.info(`    Expected : "${kw}"`);
@@ -591,10 +591,10 @@ export class FileUtils {
       if (options?.writeReport && options?.testInfo) {
         await this.writeExcelAuto(options.testInfo,
           keywords.map(kw => ({
-            Keyword:  kw,
+            Keyword: kw,
             Expected: kw,
-            Actual:   text.toLowerCase().includes(kw.toLowerCase()) ? kw : "NOT FOUND",
-            Result:   text.toLowerCase().includes(kw.toLowerCase()) ? "PASS" : "FAIL",
+            Actual: text.toLowerCase().includes(kw.toLowerCase()) ? kw : "NOT FOUND",
+            Result: text.toLowerCase().includes(kw.toLowerCase()) ? "PASS" : "FAIL",
           }))
         );
       }
@@ -624,21 +624,21 @@ export class FileUtils {
     let text = "", pageCount = 0;
     try {
       const pdfParse = require("pdf-parse");
-      const data     = await pdfParse(fs.readFileSync(filePath));
-      text      = data.text ?? "";
+      const data = await pdfParse(fs.readFileSync(filePath));
+      text = data.text ?? "";
       pageCount = data.numpages ?? 0;
     } catch (err: any) {
       if (err.code === "MODULE_NOT_FOUND") throw new Error("Run: npm install pdf-parse");
       return this.buildBillFail(filePath, `PDF read failed: ${err.message}`);
     }
 
-    const lines    = text.split("\n").map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+    const lines = text.split("\n").map((l: string) => l.trim()).filter((l: string) => l.length > 0);
     const language = this.detectScript(text);
     const fileSize = this.formatSize(fs.statSync(filePath).size);
 
     const fieldResults: BillFieldResult[] = options.fields.map(field => {
       if (field.amount !== undefined) return this.verifyBillAmount(field, lines, text);
-      if (field.text   !== undefined) return this.verifyBillText(field, lines);
+      if (field.text !== undefined) return this.verifyBillText(field, lines);
       logger.warn(`Field "${field.label}" has neither amount nor text — skipping`);
       return this.buildBillFieldFail(field, "no amount or text specified");
     });
@@ -656,7 +656,7 @@ export class FileUtils {
 
     fieldResults.forEach((f, idx) => {
       const expected = f.amount ?? f.text ?? "";
-      const actual   = f.matchedValue || "NOT FOUND";
+      const actual = f.matchedValue || "NOT FOUND";
       const matchHow = f.fieldType === "amount" ? "amount" : `${f.match ?? "contains"}`;
       logger.info(`${String(idx + 1).padStart(2, "0")}. ${pad(f.label, 20)}  ${f.found ? " PASS" : " FAIL"}`);
       logger.info(`    Expected  : "${expected}"  [${matchHow}]`);
@@ -674,13 +674,13 @@ export class FileUtils {
 
     logger.info(SEP);
     if (allFieldsFound) {
-      const hi  = fieldResults.filter(f => f.confidence === "high").length;
+      const hi = fieldResults.filter(f => f.confidence === "high").length;
       const med = fieldResults.filter(f => f.confidence === "medium").length;
       const low = fieldResults.filter(f => f.confidence === "low").length;
       logFooterPass(`RESULT : ALL ${fieldResults.length} FIELD(S) PASSED   |  high: ${hi}  medium: ${med}  low: ${low}`);
     } else {
-      const passed  = fieldResults.filter(f => f.found).length;
-      const failed  = fieldResults.filter(f => !f.found).length;
+      const passed = fieldResults.filter(f => f.found).length;
+      const failed = fieldResults.filter(f => !f.found).length;
       const missing = fieldResults.filter(f => !f.found).map(f => `"${f.label}"`);
       logFooterFail(`RESULT : ${passed} PASSED / ${failed} FAILED   |  Missing: ${missing.join(", ")}`);
     }
@@ -702,11 +702,11 @@ export class FileUtils {
   // 8. verifyDownloadInFolder
   // ==========================================================================
   static async verifyDownloadInFolder(
-    folderPath:        string,
+    folderPath: string,
     expectedExtension: string,
     options?: { waitMs?: number; fileNameContains?: string }
   ): Promise<{ fileName: string; filePath: string; fileSize: string; downloaded: boolean }> {
-    const waitMs   = options?.waitMs ?? 5000;
+    const waitMs = options?.waitMs ?? 5000;
     const deadline = Date.now() + waitMs;
     logger.step(`Check folder → ${expectedExtension}`);
 
@@ -721,7 +721,7 @@ export class FileUtils {
         .sort((a, b) => b.time - a.time);
 
       if (files.length > 0) {
-        const fp   = path.join(folderPath, files[0].name);
+        const fp = path.join(folderPath, files[0].name);
         const size = this.formatSize(fs.statSync(fp).size);
         logger.pass(`Found → ${files[0].name} | ${size}`);
         return { fileName: files[0].name, filePath: fp, fileSize: size, downloaded: true };
@@ -743,8 +743,8 @@ export class FileUtils {
     const sheet = sheetName ? workbook.getWorksheet(sheetName) : workbook.worksheets[0];
     if (!sheet) throw new Error(`Sheet not found: ${sheetName}`);
     const headers: string[] = [];
-    const rows:    any[]    = [];
-    sheet.eachRow((row, rowIndex) => {
+    const rows: any[] = [];
+    sheet.eachRow({ includeEmpty: false }, (row, rowIndex) => {
       if (rowIndex === 1) {
         row.eachCell((cell, colIndex) => { headers[colIndex] = String(cell.value ?? `col${colIndex}`); });
         return;
@@ -769,9 +769,9 @@ export class FileUtils {
   // 9b. verifyRowContainsAll
   // ==========================================================================
   static verifyRowContainsAll(
-    row:            Record<string, any>,
+    row: Record<string, any>,
     expectedValues: string[],
-    log?:           { info: (msg: string) => void }
+    log?: { info: (msg: string) => void }
   ): void {
     const rowText = Object.values(row).map(v => String(v ?? '')).join(' ');
     if (log) log.info(`Row text (first 150 chars): ${rowText.substring(0, 150)}`);
@@ -834,10 +834,10 @@ export class FileUtils {
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const workbook = new ExcelJS.Workbook();
-    const sheet    = workbook.addWorksheet(sheetName);
+    const sheet = workbook.addWorksheet(sheetName);
     if (data.length === 0) { await workbook.xlsx.writeFile(filePath); return; }
     sheet.columns = Object.keys(data[0]).map(key => ({ header: key, key, width: 20 }));
-    sheet.getRow(1).font      = { bold: true };
+    sheet.getRow(1).font = { bold: true };
     sheet.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
     data.forEach(row => sheet.addRow(row));
     await workbook.xlsx.writeFile(filePath);
@@ -847,9 +847,9 @@ export class FileUtils {
   // 14. writeExcelAuto
   // ==========================================================================
   static async writeExcelAuto(testInfo: any, data: any[], folder = "test-results/excel"): Promise<string> {
-    const testName  = (testInfo?.title ?? "test").replace(/\s+/g, "_");
+    const testName = (testInfo?.title ?? "test").replace(/\s+/g, "_");
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const dir       = path.join(process.cwd(), folder);
+    const dir = path.join(process.cwd(), folder);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const fullPath = path.join(dir, `Excel_${testName}_${timestamp}.xlsx`);
     await this.writeExcel(fullPath, data);
@@ -894,14 +894,14 @@ export class FileUtils {
   // 19. verifyMemberListAttachmentExcel
   // ==========================================================================
   static async verifyMemberListAttachmentExcel(
-    filePath:                  string,
-    capturedClientName:        string,
+    filePath: string,
+    capturedClientName: string,
     capturedMedicalPolicyName: string,
     runtime: { lastName: string; employeeNumber: string; email: string; nationalIdNumber: string }
   ): Promise<void> {
     const XlsxPopulate = require('xlsx-populate').default || require('xlsx-populate');
-    const workbook     = await XlsxPopulate.fromFileAsync(filePath);
-    const worksheet    = workbook.sheet('Membership List');
+    const workbook = await XlsxPopulate.fromFileAsync(filePath);
+    const worksheet = workbook.sheet('Membership List');
 
     const clientNameCell = String(worksheet.cell(5, 2).value() ?? '').trim();
     const policyNameCell = String(worksheet.cell(7, 2).value() ?? '').trim();
@@ -913,8 +913,8 @@ export class FileUtils {
       throw new Error(`Policy Name mismatch. Expected: "${capturedMedicalPolicyName}" | Actual: "${policyNameCell}"`);
 
     const HEADER_ROW = 11;
-    const DATA_ROW   = 12;
-    const MAX_COL    = 50;
+    const DATA_ROW = 12;
+    const MAX_COL = 50;
     const headerToCol: Record<string, number> = {};
     for (let c = 1; c <= MAX_COL; c++) {
       const hdr = worksheet.cell(HEADER_ROW, c).value();
@@ -925,20 +925,20 @@ export class FileUtils {
       String(worksheet.cell(DATA_ROW, headerToCol[col] ?? 0).value() ?? '').trim();
 
     const fields: [string, string, string, boolean][] = [
-      ['Last Name',          get('Last Name'),          runtime.lastName,          true],
-      ['Employee No.',       get('Employee No.'),       runtime.employeeNumber,    true],
-      ['Policy',             get('Policy'),             capturedMedicalPolicyName, true],
-      ['Category',           get('Category'),           'Cat A_',                  false],
-      ['Relation',           get('Relation'),           'Principal',               true],
-      ['Marital Status',     get('Marital Status'),     'Married',                 true],
-      ['Nationality',        get('Nationality'),        'India',                   true],
-      ['National ID Number', get('National ID Number'), runtime.nationalIdNumber,  false],
-      ['Email',              get('Email'),              runtime.email,             true],
+      ['Last Name', get('Last Name'), runtime.lastName, true],
+      ['Employee No.', get('Employee No.'), runtime.employeeNumber, true],
+      ['Policy', get('Policy'), capturedMedicalPolicyName, true],
+      ['Category', get('Category'), 'Cat A_', false],
+      ['Relation', get('Relation'), 'Principal', true],
+      ['Marital Status', get('Marital Status'), 'Married', true],
+      ['Nationality', get('Nationality'), 'India', true],
+      ['National ID Number', get('National ID Number'), runtime.nationalIdNumber, false],
+      ['Email', get('Email'), runtime.email, true],
     ];
 
     for (const [label, actual, expected, exact] of fields) {
       logger.info(`MemberList — ${label}: "${actual}" | Expected: "${expected}"`);
-      if (exact  && actual !== expected)       throw new Error(`${label} mismatch. Expected: "${expected}" | Actual: "${actual}"`);
+      if (exact && actual !== expected) throw new Error(`${label} mismatch. Expected: "${expected}" | Actual: "${actual}"`);
       if (!exact && !actual.includes(expected)) throw new Error(`${label} should contain "${expected}" | Actual: "${actual}"`);
     }
 
@@ -949,18 +949,18 @@ export class FileUtils {
   // 20. verifyWorkflowLogsExcelMemberRow
   // ==========================================================================
   static async verifyWorkflowLogsExcelMemberRow(
-    filePath:                  string,
-    runtime:                   { lastName: string; employeeNumber: string },
-    capturedClientName:        string,
+    filePath: string,
+    runtime: { lastName: string; employeeNumber: string },
+    capturedClientName: string,
     capturedMedicalPolicyName: string
   ): Promise<void> {
     const XlsxPopulate = require('xlsx-populate').default || require('xlsx-populate');
-    const workbook     = await XlsxPopulate.fromFileAsync(filePath);
-    const worksheet    = workbook.sheet('Workflow Logs Report');
+    const workbook = await XlsxPopulate.fromFileAsync(filePath);
+    const worksheet = workbook.sheet('Workflow Logs Report');
 
-    const HEADER_ROW     = 8;
+    const HEADER_ROW = 8;
     const FIRST_DATA_ROW = 9;
-    const MAX_COL        = 54;
+    const MAX_COL = 54;
 
     const headerToCol: Record<string, number> = {};
     for (let c = 1; c <= MAX_COL; c++) {
@@ -990,20 +990,20 @@ export class FileUtils {
       throw new Error(`Employee Number "${runtime.employeeNumber}" not found in Workflow Logs (rows ${FIRST_DATA_ROW}–${lastDataRow})`);
 
     const fields: [string, string, string, boolean][] = [
-      ['Member Name',  get(memberDataRow, 'Member Name'),    runtime.lastName,          false],
-      ['Employee No',  get(memberDataRow, 'Employee Number'), runtime.employeeNumber,   true],
-      ['Company',      get(memberDataRow, 'Company'),         capturedClientName,        true],
-      ['Policy',       get(memberDataRow, 'Policy'),          capturedMedicalPolicyName, true],
-      ['Category',     get(memberDataRow, 'Category'),        'Cat A_',                 false],
-      ['Relation',     get(memberDataRow, 'Relation'),        'Principal',              true],
-      ['Request Type', get(memberDataRow, 'Request Type'),    'Member Addition',        true],
-      ['Nationality',  get(memberDataRow, 'Nationality'),     'India',                  true],
+      ['Member Name', get(memberDataRow, 'Member Name'), runtime.lastName, false],
+      ['Employee No', get(memberDataRow, 'Employee Number'), runtime.employeeNumber, true],
+      ['Company', get(memberDataRow, 'Company'), capturedClientName, true],
+      ['Policy', get(memberDataRow, 'Policy'), capturedMedicalPolicyName, true],
+      ['Category', get(memberDataRow, 'Category'), 'Cat A_', false],
+      ['Relation', get(memberDataRow, 'Relation'), 'Principal', true],
+      ['Request Type', get(memberDataRow, 'Request Type'), 'Member Addition', true],
+      ['Nationality', get(memberDataRow, 'Nationality'), 'India', true],
     ];
 
     logger.info(`Workflow — Row ${memberDataRow} found`);
     for (const [label, actual, expected, exact] of fields) {
       logger.info(`  ${label.padEnd(14)}: "${actual}" | Expected: "${expected}"`);
-      if (exact  && actual !== expected)        throw new Error(`${label} mismatch. Expected: "${expected}" | Actual: "${actual}"`);
+      if (exact && actual !== expected) throw new Error(`${label} mismatch. Expected: "${expected}" | Actual: "${actual}"`);
       if (!exact && !actual.includes(expected)) throw new Error(`${label} should contain "${expected}" | Actual: "${actual}"`);
     }
 
@@ -1014,17 +1014,17 @@ export class FileUtils {
   // 21. verifyConsolidatedMembershipExcelMemberRow
   // ==========================================================================
   static async verifyConsolidatedMembershipExcelMemberRow(
-    filePath:                  string,
-    runtime:                   { firstName: string; lastName: string; employeeNumber: string; email: string; nationalIdNumber: string },
+    filePath: string,
+    runtime: { firstName: string; lastName: string; employeeNumber: string; email: string; nationalIdNumber: string },
     capturedMedicalPolicyName: string
   ): Promise<void> {
     const XlsxPopulate = require('xlsx-populate').default || require('xlsx-populate');
-    const workbook     = await XlsxPopulate.fromFileAsync(filePath);
-    const worksheet    = workbook.sheet('Membership List');
+    const workbook = await XlsxPopulate.fromFileAsync(filePath);
+    const worksheet = workbook.sheet('Membership List');
 
-    const HEADER_ROW     = 6;
+    const HEADER_ROW = 6;
     const FIRST_DATA_ROW = 7;
-    const MAX_COL        = 57;
+    const MAX_COL = 57;
 
     const headerToCol: Record<string, number> = {};
     for (let c = 1; c <= MAX_COL; c++) {
@@ -1035,11 +1035,14 @@ export class FileUtils {
     const get = (row: number, col: string): string =>
       String(worksheet.cell(row, headerToCol[col] ?? 0).value() ?? '').trim();
 
-    let lastDataRow = FIRST_DATA_ROW;
-    for (let r = FIRST_DATA_ROW; r <= 10000; r++) {
-      if (String(worksheet.cell(r, 1).value() ?? '').trim() === '') break;
+    const EMP_COL = headerToCol['Employee Number'] ?? 14;
+    const MAX_SCAN = 500;
+    let lastDataRow = FIRST_DATA_ROW - 1;
+    for (let r = FIRST_DATA_ROW; r <= FIRST_DATA_ROW + MAX_SCAN; r++) {
+      if (String(worksheet.cell(r, EMP_COL).value() ?? '').trim() === '') break;
       lastDataRow = r;
     }
+
     const totalRows = lastDataRow - FIRST_DATA_ROW + 1;
     logger.info(`Consolidated data rows: ${totalRows} (rows ${FIRST_DATA_ROW}–${lastDataRow})`);
 
@@ -1056,23 +1059,23 @@ export class FileUtils {
     logger.info(`Consolidated — Row ${memberDataRow} | BenefitNet ID: ${benefitNetId}`);
 
     const fields: [string, string, string, boolean][] = [
-      ['First Name',            get(memberDataRow, 'First Name'),            runtime.firstName,         true],
-      ['Last Name',             get(memberDataRow, 'Last Name'),             runtime.lastName,          true],
-      ['Employee Number',       get(memberDataRow, 'Employee Number'),       runtime.employeeNumber,    true],
-      ['Email',                 get(memberDataRow, 'Email'),                 runtime.email,             true],
-      ['Nationality',           get(memberDataRow, 'Nationality'),           'India',                   true],
-      ['Marital Status',        get(memberDataRow, 'Marital Status'),        'Married',                 true],
-      ['Relation',              get(memberDataRow, 'Relation'),              'Principal',               true],
-      ['Policy',                get(memberDataRow, 'Policy'),                capturedMedicalPolicyName, true],
-      ['Category',              get(memberDataRow, 'Category'),              'Cat A_',                  false],
-      ['Country of Residence',  get(memberDataRow, 'Country of Residence'), 'United Arab Emirates',    true],
-      ['Member Profile Status', get(memberDataRow, 'Member Profile Status'),'Pending Addition',        true],
-      ['National ID Number',    get(memberDataRow, 'National ID Number'),    runtime.nationalIdNumber,  false],
+      ['First Name', get(memberDataRow, 'First Name'), runtime.firstName, true],
+      ['Last Name', get(memberDataRow, 'Last Name'), runtime.lastName, true],
+      ['Employee Number', get(memberDataRow, 'Employee Number'), runtime.employeeNumber, true],
+      ['Email', get(memberDataRow, 'Email'), runtime.email, true],
+      ['Nationality', get(memberDataRow, 'Nationality'), 'India', true],
+      ['Marital Status', get(memberDataRow, 'Marital Status'), 'Married', true],
+      ['Relation', get(memberDataRow, 'Relation'), 'Principal', true],
+      ['Policy', get(memberDataRow, 'Policy'), capturedMedicalPolicyName, true],
+      ['Category', get(memberDataRow, 'Category'), 'Cat A_', false],
+      ['Country of Residence', get(memberDataRow, 'Country of Residence'), 'United Arab Emirates', true],
+      ['Member Profile Status', get(memberDataRow, 'Member Profile Status'), 'Pending Addition', true],
+      ['National ID Number', get(memberDataRow, 'National ID Number'), runtime.nationalIdNumber, false],
     ];
 
     for (const [label, actual, expected, exact] of fields) {
       logger.info(`  ${label.padEnd(22)}: "${actual}" | Expected: "${expected}"`);
-      if (exact  && actual !== expected)        throw new Error(`${label} mismatch. Expected: "${expected}" | Actual: "${actual}"`);
+      if (exact && actual !== expected) throw new Error(`${label} mismatch. Expected: "${expected}" | Actual: "${actual}"`);
       if (!exact && !actual.includes(expected)) throw new Error(`${label} should contain "${expected}" | Actual: "${actual}"`);
     }
 
@@ -1106,7 +1109,7 @@ export class FileUtils {
   // ==========================================================================
   static getTcDownloadDir(): string {
     const base = path.join(process.cwd(), "test-results", "downloads");
-    const dir  = FileUtils.currentTcId
+    const dir = FileUtils.currentTcId
       ? path.join(base, FileUtils.currentTcId)
       : base;
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -1144,9 +1147,9 @@ export class FileUtils {
   //   └── 03_Round2_CensusFill_14-13-45.xlsx
   // ==========================================================================
   static async captureExcelStep(
-    filePath:   string,
-    stepLabel:  string,
-    tcId:       string,
+    filePath: string,
+    stepLabel: string,
+    tcId: string,
     sheetName?: string
   ): Promise<void> {
 
@@ -1165,15 +1168,15 @@ export class FileUtils {
     //   Saved as: 01_ImportMembers_19-6-2026--15-26-36.xlsx
     //   stepLabel is used ONLY in the console diff log — not in the file name
     const originalFileName = path.basename(filePath);
-    const copyName         = `${String(count).padStart(2, '0')}_${originalFileName}`;
-    const copyPath         = path.join(stepsDir, copyName);
+    const copyName = `${String(count).padStart(2, '0')}_${originalFileName}`;
+    const copyPath = path.join(stepsDir, copyName);
     fs.copyFileSync(filePath, copyPath);
     logger.info(`[ExcelStep ${count}] "${stepLabel}" → saved: ${copyName}`);
 
     // ── 4. Read current rows ─────────────────────────────────────────────────
     let currentRows: Array<Record<string, unknown>> = [];
     try {
-      const raw   = await FileUtils.readExcel(filePath, sheetName);
+      const raw = await FileUtils.readExcel(filePath, sheetName);
       currentRows = raw as Array<Record<string, unknown>>;
     } catch (error) {
       logger.warn(
@@ -1191,9 +1194,9 @@ export class FileUtils {
         `${currentRows.length} data row(s)`
       );
     } else {
-      const prev     = history[history.length - 1];
+      const prev = history[history.length - 1];
       const prevRows = prev.rows;
-      const divider  = '─'.repeat(72);
+      const divider = '─'.repeat(72);
 
       logger.info(`[ExcelStep ${count}] Diff: "${stepLabel}" vs "${prev.label}"`);
       logger.info(divider);
@@ -1202,7 +1205,7 @@ export class FileUtils {
       const maxRows = Math.max(prevRows.length, currentRows.length);
 
       for (let i = 0; i < maxRows; i++) {
-        const prevRow: Record<string, unknown> = prevRows[i]    ?? {};
+        const prevRow: Record<string, unknown> = prevRows[i] ?? {};
         const currRow: Record<string, unknown> = currentRows[i] ?? {};
 
         if (i >= prevRows.length) {
@@ -1274,7 +1277,7 @@ export class FileUtils {
 
     for (let i = 0; i < lines.length; i++) {
       if (this.amountInLine(lines[i], amount, field.currency)) {
-        const above        = lines.slice(Math.max(0, i - PROXIMITY), i);
+        const above = lines.slice(Math.max(0, i - PROXIMITY), i);
         const hasLabelAbove = above.some(l =>
           SEPARATORS.some(s => l.trimEnd().endsWith(s)) || (!/\d/.test(l) && l.length > 2)
         );
@@ -1285,8 +1288,8 @@ export class FileUtils {
     }
 
     const allAmounts = [...fullText.matchAll(MONEY_PATTERN)].map(m => m[0].trim());
-    const norm       = this.normaliseAmount(amount);
-    const matched    = allAmounts.find(a =>
+    const norm = this.normaliseAmount(amount);
+    const matched = allAmounts.find(a =>
       this.normaliseAmount(a) === norm ||
       this.normaliseAmount(a).includes(norm) ||
       norm.includes(this.normaliseAmount(a))
@@ -1306,13 +1309,13 @@ export class FileUtils {
   }
 
   private static verifyBillText(field: BillField, lines: string[]): BillFieldResult {
-    const value     = field.text!;
-    const matchType = field.match    ?? "contains";
-    const location  = field.location ?? "auto";
+    const value = field.text!;
+    const matchType = field.match ?? "contains";
+    const location = field.location ?? "auto";
 
     if (location === "near-label" || location === "auto") {
       for (let i = 0; i < lines.length; i++) {
-        const line        = lines[i];
+        const line = lines[i];
         const isLabelLine =
           SEPARATORS.some(s => line.includes(s)) ||
           (!/\d/.test(line) && line.length > 2 && line.length < 60);
@@ -1394,11 +1397,11 @@ export class FileUtils {
 
   private static detectScript(text: string): string {
     const scripts: Record<string, RegExp> = {
-      devanagari: /[\u0900-\u097F]/, tamil:     /[\u0B80-\u0BFF]/,
-      telugu:     /[\u0C00-\u0C7F]/, kannada:   /[\u0C80-\u0CFF]/,
-      malayalam:  /[\u0D00-\u0D7F]/, bengali:   /[\u0980-\u09FF]/,
-      gujarati:   /[\u0A80-\u0AFF]/, punjabi:   /[\u0A00-\u0A7F]/,
-      odia:       /[\u0B00-\u0B7F]/,
+      devanagari: /[\u0900-\u097F]/, tamil: /[\u0B80-\u0BFF]/,
+      telugu: /[\u0C00-\u0C7F]/, kannada: /[\u0C80-\u0CFF]/,
+      malayalam: /[\u0D00-\u0D7F]/, bengali: /[\u0980-\u09FF]/,
+      gujarati: /[\u0A80-\u0AFF]/, punjabi: /[\u0A00-\u0A7F]/,
+      odia: /[\u0B00-\u0B7F]/,
     };
     const counts = Object.entries(scripts)
       .map(([name, re]) => ({ name, count: (text.match(new RegExp(re.source, "g")) ?? []).length }))
@@ -1417,9 +1420,9 @@ export class FileUtils {
   private static buildBillFieldFail(field: BillField, reason: string): BillFieldResult {
     return {
       ...field, found: false,
-      fieldType:    field.amount !== undefined ? "amount" : "text",
-      matchedLine:  "", matchedValue: "", lineNumber: 0,
-      strategy:     "not-found", confidence: "low", reason,
+      fieldType: field.amount !== undefined ? "amount" : "text",
+      matchedLine: "", matchedValue: "", lineNumber: 0,
+      strategy: "not-found", confidence: "low", reason,
     };
   }
 
@@ -1435,34 +1438,34 @@ export class FileUtils {
   private static async writeBillReport(testInfo: any, fields: BillFieldResult[]): Promise<void> {
     try {
       const workbook = new ExcelJS.Workbook();
-      const sheet    = workbook.addWorksheet("PDF Bill Verify");
-      const dir      = path.join(process.cwd(), "test-results", "excel");
+      const sheet = workbook.addWorksheet("PDF Bill Verify");
+      const dir = path.join(process.cwd(), "test-results", "excel");
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
       sheet.columns = [
-        { header: "Label",        key: "label",        width: 20 },
-        { header: "Type",         key: "fieldType",    width: 10 },
-        { header: "Expected",     key: "expected",     width: 20 },
-        { header: "Match",        key: "match",        width: 12 },
-        { header: "Result",       key: "result",       width: 12 },
-        { header: "Matched",      key: "matchedValue", width: 25 },
-        { header: "Matched Line", key: "matchedLine",  width: 50 },
-        { header: "Line No",      key: "lineNumber",   width: 10 },
-        { header: "Strategy",     key: "strategy",     width: 22 },
-        { header: "Confidence",   key: "confidence",   width: 12 },
+        { header: "Label", key: "label", width: 20 },
+        { header: "Type", key: "fieldType", width: 10 },
+        { header: "Expected", key: "expected", width: 20 },
+        { header: "Match", key: "match", width: 12 },
+        { header: "Result", key: "result", width: 12 },
+        { header: "Matched", key: "matchedValue", width: 25 },
+        { header: "Matched Line", key: "matchedLine", width: 50 },
+        { header: "Line No", key: "lineNumber", width: 10 },
+        { header: "Strategy", key: "strategy", width: 22 },
+        { header: "Confidence", key: "confidence", width: 12 },
       ];
-      sheet.getRow(1).font      = { bold: true, color: { argb: "FFFFFFFF" } };
+      sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
       sheet.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
-      sheet.getRow(1).fill      = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
+      sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
 
       fields.forEach(f => {
         const row = sheet.addRow({
-          label:        f.label,     fieldType:    f.fieldType,
-          expected:     f.amount ?? f.text ?? "",
-          match:        f.match ?? (f.fieldType === "amount" ? "amount" : "contains"),
-          result:       f.found ? " PASS" : " FAIL",
+          label: f.label, fieldType: f.fieldType,
+          expected: f.amount ?? f.text ?? "",
+          match: f.match ?? (f.fieldType === "amount" ? "amount" : "contains"),
+          result: f.found ? " PASS" : " FAIL",
           matchedValue: f.matchedValue || "—", matchedLine: f.matchedLine || "—",
-          lineNumber:   f.lineNumber   || "—", strategy:    f.strategy, confidence: f.confidence,
+          lineNumber: f.lineNumber || "—", strategy: f.strategy, confidence: f.confidence,
         });
         row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: f.found ? "FFE2EFDA" : "FFFFC7CE" } };
       });
@@ -1479,7 +1482,7 @@ export class FileUtils {
     const errors: ColumnError[] = [];
     rows.forEach((row, rowIndex) => {
       schema.forEach(col => {
-        const value    = row[col.name];
+        const value = row[col.name];
         const required = col.required !== false;
         if (required && (value === undefined || value === null || value === "")) {
           errors.push({ row: rowIndex + 2, column: col.name, value, expected: col.type, reason: "Required value is empty" });
@@ -1497,60 +1500,60 @@ export class FileUtils {
   private static checkType(value: any, type: ColumnType): boolean {
     const str = String(value).trim();
     switch (type) {
-      case "number":  return !isNaN(Number(str)) && str !== "";
-      case "date":    return !isNaN(Date.parse(str)) || value instanceof Date;
-      case "email":   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
+      case "number": return !isNaN(Number(str)) && str !== "";
+      case "date": return !isNaN(Date.parse(str)) || value instanceof Date;
+      case "email": return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str);
       case "boolean": return ["true", "false", "yes", "no", "1", "0"].includes(str.toLowerCase());
-      case "string":  return typeof value === "string" || typeof value === "number";
-      default:        return true;
+      case "string": return typeof value === "string" || typeof value === "number";
+      default: return true;
     }
   }
 
   private static async appendMasterReport(result: VerifyResult, testInfo?: any): Promise<void> {
     try {
       if (!fs.existsSync(MASTER_REPORT_DIR)) fs.mkdirSync(MASTER_REPORT_DIR, { recursive: true });
-      const workbook  = new ExcelJS.Workbook();
+      const workbook = new ExcelJS.Workbook();
       const sheetName = "Download Summary";
       if (fs.existsSync(MASTER_REPORT_FILE)) await workbook.xlsx.readFile(MASTER_REPORT_FILE);
       let sheet = workbook.getWorksheet(sheetName);
       if (!sheet) {
         sheet = workbook.addWorksheet(sheetName);
         sheet.columns = [
-          { header: "Timestamp",     key: "timestamp",    width: 22 },
-          { header: "Test Name",     key: "testName",     width: 40 },
-          { header: "File Name",     key: "fileName",     width: 35 },
-          { header: "Extension",     key: "extension",    width: 12 },
-          { header: "File Size",     key: "fileSize",     width: 12 },
-          { header: "Downloaded",    key: "downloaded",   width: 12 },
-          { header: "File Valid",    key: "valid",        width: 12 },
-          { header: "Keywords",      key: "containsAll",  width: 14 },
-          { header: "Columns Valid", key: "columnValid",  width: 14 },
+          { header: "Timestamp", key: "timestamp", width: 22 },
+          { header: "Test Name", key: "testName", width: 40 },
+          { header: "File Name", key: "fileName", width: 35 },
+          { header: "Extension", key: "extension", width: 12 },
+          { header: "File Size", key: "fileSize", width: 12 },
+          { header: "Downloaded", key: "downloaded", width: 12 },
+          { header: "File Valid", key: "valid", width: 12 },
+          { header: "Keywords", key: "containsAll", width: 14 },
+          { header: "Columns Valid", key: "columnValid", width: 14 },
           { header: "Missing Words", key: "missingWords", width: 30 },
-          { header: "Col Errors",    key: "columnErrors", width: 12 },
-          { header: "Rows",          key: "rowCount",     width: 10 },
-          { header: "Pages",         key: "pageCount",    width: 10 },
-          { header: "Reason",        key: "reason",       width: 40 },
+          { header: "Col Errors", key: "columnErrors", width: 12 },
+          { header: "Rows", key: "rowCount", width: 10 },
+          { header: "Pages", key: "pageCount", width: 10 },
+          { header: "Reason", key: "reason", width: 40 },
         ];
-        sheet.getRow(1).font      = { bold: true, color: { argb: "FFFFFFFF" } };
+        sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
         sheet.getRow(1).alignment = { vertical: "middle", horizontal: "center" };
-        sheet.getRow(1).fill      = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
+        sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1F3864" } };
       }
-      const pass   = result.downloaded && result.valid && result.containsAll && result.columnValid;
+      const pass = result.downloaded && result.valid && result.containsAll && result.columnValid;
       const newRow = sheet.addRow({
-        timestamp:    new Date().toISOString().replace("T", " ").substring(0, 19),
-        testName:     testInfo?.title ?? result.testName ?? "—",
-        fileName:     result.fileName  || "—",
-        extension:    result.extension || "—",
-        fileSize:     result.fileSize,
-        downloaded:   result.downloaded  ? " Yes"  : " No",
-        valid:        result.valid        ? " Pass" : " Fail",
-        containsAll:  result.containsAll  ? " Pass" : " Fail",
-        columnValid:  result.columnValid  ? " Pass" : " Fail",
+        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
+        testName: testInfo?.title ?? result.testName ?? "—",
+        fileName: result.fileName || "—",
+        extension: result.extension || "—",
+        fileSize: result.fileSize,
+        downloaded: result.downloaded ? " Yes" : " No",
+        valid: result.valid ? " Pass" : " Fail",
+        containsAll: result.containsAll ? " Pass" : " Fail",
+        columnValid: result.columnValid ? " Pass" : " Fail",
         missingWords: result.missingWords.join(", ") || "—",
         columnErrors: result.columnErrors.length > 0 ? result.columnErrors.length : "—",
-        rowCount:     result.rowCount  ?? "—",
-        pageCount:    result.pageCount ?? "—",
-        reason:       result.reason    ?? "—",
+        rowCount: result.rowCount ?? "—",
+        pageCount: result.pageCount ?? "—",
+        reason: result.reason ?? "—",
       });
       newRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: pass ? "FFE2EFDA" : "FFFFC7CE" } };
       await workbook.xlsx.writeFile(MASTER_REPORT_FILE);
@@ -1558,10 +1561,10 @@ export class FileUtils {
   }
 
   private static baseVerify(filePath: string, extensions: string[]): VerifyResult {
-    if (!fs.existsSync(filePath))           return this.fail(filePath, `File not found: ${path.basename(filePath)}`);
+    if (!fs.existsSync(filePath)) return this.fail(filePath, `File not found: ${path.basename(filePath)}`);
     const ext = path.extname(filePath).toLowerCase();
-    if (!extensions.includes(ext))          return this.fail(filePath, `Expected ${extensions.join("/")} | got ${ext}`);
-    if (fs.statSync(filePath).size === 0)   return this.fail(filePath, `File is empty`);
+    if (!extensions.includes(ext)) return this.fail(filePath, `Expected ${extensions.join("/")} | got ${ext}`);
+    if (fs.statSync(filePath).size === 0) return this.fail(filePath, `File is empty`);
     return this.buildResult(filePath, ext, true, [], []);
   }
 
@@ -1570,21 +1573,21 @@ export class FileUtils {
     missingWords: string[], columnErrors: ColumnError[], testInfo?: any
   ): VerifyResult {
     return {
-      fileName:     path.basename(filePath), filePath,
-      fileSize:     filePath && fs.existsSync(filePath) ? this.formatSize(fs.statSync(filePath).size) : "0 B",
+      fileName: path.basename(filePath), filePath,
+      fileSize: filePath && fs.existsSync(filePath) ? this.formatSize(fs.statSync(filePath).size) : "0 B",
       extension, valid, downloaded: false,
-      containsAll:  missingWords.length === 0, missingWords,
+      containsAll: missingWords.length === 0, missingWords,
       columnErrors, columnValid: columnErrors.length === 0,
-      testName:     testInfo?.title, timestamp: new Date().toISOString(),
+      testName: testInfo?.title, timestamp: new Date().toISOString(),
     };
   }
 
   private static fail(filePath: string, reason: string, testInfo?: any): VerifyResult {
     logger.error(`Verify failed → ${reason}`);
     return {
-      fileName:     filePath ? path.basename(filePath) : "",
-      filePath:     filePath ?? "", fileSize: "0 B",
-      extension:    filePath ? path.extname(filePath) : "",
+      fileName: filePath ? path.basename(filePath) : "",
+      filePath: filePath ?? "", fileSize: "0 B",
+      extension: filePath ? path.extname(filePath) : "",
       valid: false, downloaded: false,
       containsAll: false, missingWords: [],
       columnErrors: [], columnValid: false,
@@ -1602,13 +1605,13 @@ export class FileUtils {
     if (val === null || val === undefined) return "";
     if (val instanceof Date) return val.toISOString().split("T")[0];
     if (typeof val === "object" && "result" in val) return (val as any).result;
-    if (typeof val === "object" && "text"   in val) return (val as any).text;
+    if (typeof val === "object" && "text" in val) return (val as any).text;
     return val;
   }
 
   private static formatSize(bytes: number): string {
-    if (bytes < 1024)             return `${bytes} B`;
-    if (bytes < 1024 * 1024)      return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 

@@ -2,6 +2,7 @@ import { expect } from '@playwright/test';
 import { BasePage } from 'src/pages/basePage';
 import { EmailLogElements } from 'src/pages/elements/emailLog';
 import { logger as log } from 'src/helpers/logger';
+import { FileUtils } from 'src/helpers/fileUtils';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -83,56 +84,56 @@ export class EmailLogPage extends BasePage {
      */
     async clickBackToList(): Promise<void> {
         await this.waitForElementIsVisible(this.emailLog.backToListButton);
+        await this.scrollIntoView(this.emailLog.backToListButton);
         await this.click(this.emailLog.backToListButton);
     }
 
     /**
- * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
- * Steps: Paginates through results until the member row is found, then asserts visibility.
- */
+     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+     * Steps: Paginates through results until the member row is found, then asserts visibility.
+     */
     async assertEmailLogRowExistsForMember(policyName: string, memberLastName: string): Promise<void> {
-        // await this.isVisible(this.emailLog.emailLogNotificationTypeLabel);
         await this.paginateToMemberRow(memberLastName);
         await this.isVisible(this.emailLog.emailLogPolicyCellByMemberLastName(memberLastName, policyName));
-        log.info(`assertEmailLogRowExistsForMember : ${memberLastName} | ${policyName}`)
+        log.info(`assertEmailLogRowExistsForMember : ${memberLastName} | ${policyName}`);
     }
 
     /**
      * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-     * Steps: Asserts text visibility components for operational classifications ddition request.
+     * Steps: Asserts text visibility components for operational classifications addition request.
      */
     async assertEmailLogRowExistsForLastNameWithAdditionRequest(memberLastName: string): Promise<void> {
         await this.assertElementVisible(this.emailLog.emailLogRowByLastNameWithAdditionRequest(memberLastName));
     }
 
     /**
-* Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-* Steps: Asserts element visibility components for notification type.
-*/
+     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+     * Steps: Asserts element visibility components for notification type.
+     */
     async assertEmailLogRowExistsForLastNameWithNotificationType(memberLastName: string): Promise<void> {
         await this.assertElementVisible(this.emailLog.emailLogRowByLastNameWithNotificationType(memberLastName));
     }
 
     /**
-    * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-    * Steps: Asserts element visibility components for yop email.
-    */
+     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+     * Steps: Asserts element visibility components for yop email.
+     */
     async assertEmailLogRowExistsForToYopEmail(memberLastName: string, toEmail: string): Promise<void> {
         await this.isVisible(this.emailLog.emailDetailByLastNameWithToYopEmailLabel(memberLastName, toEmail));
     }
 
     /**
-* Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-* Steps: Asserts element visibility components for subject.
-*/
-    async assertEmailLogRowExistsForToYopEmailHaveAttachments( memberLastName: string): Promise<void> {
+     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+     * Steps: Asserts element visibility components for subject.
+     */
+    async assertEmailLogRowExistsForToYopEmailHaveAttachments(memberLastName: string): Promise<void> {
         await this.isVisible(this.emailLog.emailDetailSubjectByMemberLastName(memberLastName));
     }
 
     /**
-* Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-* Steps: Asserts element visibility components for attachment zero.
-*/
+     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
+     * Steps: Asserts element visibility components for attachment zero.
+     */
     async assertEmailLogRowExistsForToYopEmailHaveAttachmentsZero(memberLastName: string): Promise<void> {
         await this.isVisible(this.emailLog.emailLogRowByLastNameWithAttachmentZero(memberLastName));
     }
@@ -306,22 +307,24 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Step Group: SG : EA : Download and Verify Inbound Mail Attachment Excel Structure Details
-     * Steps: Allocates workspace download points, monitors file save sequences, handles empty assets checks, opens spreadsheet nodes via third-party parser engines, maps coordinate structures, and executes multi-column value asset validation routines.
+     * Download the insurer bulk request attachment Excel once.
+     * Call this ONCE before the member verification loop.
      */
-    async downloadAndVerifyAttachmentExcel(capturedClientName: string, capturedMedicalPolicyName: string, runtime: { lastName: string; employeeNumber: string; email: string; nationalIdNumber: string; maritalStatus?: string }): Promise<string> {
+    async downloadAttachmentExcel(
+        capturedClientName: string,
+        capturedMedicalPolicyName: string
+    ): Promise<string> {
 
         const attachmentLink = this.emailLog.MemberAdditionBulkRequestMemberListAttachmentLink;
         await this.waitForElementIsVisible(attachmentLink);
 
-        const downloadDirectory = path.join(process.cwd(), 'downloads');
-        if (!fs.existsSync(downloadDirectory)) fs.mkdirSync(downloadDirectory, { recursive: true });
-
+        const downloadDirectory = FileUtils.getTcDownloadDir();
         const downloadEventPromise = this.page.waitForEvent('download');
         await this.click(attachmentLink);
         const downloadedFile = await downloadEventPromise;
 
-        const savedFilePath = path.join(downloadDirectory, downloadedFile.suggestedFilename());
+        const uniqueFileName = `${downloadedFile.suggestedFilename()}`;
+        const savedFilePath = path.join(downloadDirectory, uniqueFileName);
         await downloadedFile.saveAs(savedFilePath);
 
         let waited = 0;
@@ -332,6 +335,20 @@ export class EmailLogPage extends BasePage {
         }
 
         log.info(`Attachment Excel saved: ${savedFilePath}`);
+        return savedFilePath;
+    }
+
+    /**
+     * Verify one member row in the already-downloaded attachment Excel.
+     * memberIndex 0 = row 12, memberIndex 1 = row 13, etc.
+     */
+    async verifyAttachmentExcelRow(
+        savedFilePath: string,
+        memberIndex: number,
+        capturedClientName: string,
+        capturedMedicalPolicyName: string,
+        runtime: { lastName: string; employeeNumber: string; email: string; nationalIdNumber: string; maritalStatus?: string }
+    ): Promise<void> {
 
         const workbook = await XlsxPopulate.fromFileAsync(savedFilePath);
         const worksheet = workbook.sheet('Membership List');
@@ -342,10 +359,10 @@ export class EmailLogPage extends BasePage {
         expect(policyNameCell).toContain(capturedMedicalPolicyName);
 
         const HEADER_ROW = 11;
-        const DATA_ROW = 12;
+        const DATA_ROW = 12 + memberIndex;   // ← dynamic row per member
         const MAX_COL = 50;
-        const headerToCol: Record<string, number> = {};
 
+        const headerToCol: Record<string, number> = {};
         for (let c = 1; c <= MAX_COL; c++) {
             const hdr = worksheet.cell(HEADER_ROW, c).value();
             if (hdr) headerToCol[String(hdr).trim()] = c;
@@ -364,6 +381,8 @@ export class EmailLogPage extends BasePage {
         const nationalId = getCell('National ID Number');
         const email = getCell('Email');
 
+        const expectedMaritalStatus = runtime.maritalStatus ?? 'Married';
+
         log.info(`Attachment — Last Name: "${lastName}" | Expected: "${runtime.lastName}"`);
         expect(lastName).toBe(runtime.lastName);
         log.info(`Attachment — Employee No.: "${employeeNo}" | Expected: "${runtime.employeeNumber}"`);
@@ -374,7 +393,6 @@ export class EmailLogPage extends BasePage {
         expect(category).toContain('Cat A_');
         log.info(`Attachment — Relation: "${relation}"`);
         expect(relation).toBe('Principal');
-        const expectedMaritalStatus = runtime.maritalStatus ?? 'Married';
         log.info(`Attachment — Marital Status: "${maritalStatus}" | Expected: "${expectedMaritalStatus}"`);
         expect(maritalStatus).toBe(expectedMaritalStatus);
         log.info(`Attachment — Nationality: "${nationality}"`);
@@ -384,7 +402,6 @@ export class EmailLogPage extends BasePage {
         log.info(`Attachment — Email: "${email}" | Expected: "${runtime.email}"`);
         expect(email).toBe(runtime.email);
 
-        log.info('Attachment Excel — all verifications passed');
-        return savedFilePath;
+        log.info(`Attachment Excel — Member ${memberIndex + 1} (row ${DATA_ROW}) all verifications passed`);
     }
 }

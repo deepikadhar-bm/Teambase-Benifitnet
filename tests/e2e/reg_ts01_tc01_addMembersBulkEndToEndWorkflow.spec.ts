@@ -119,9 +119,9 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                         allErrors: memberErrors
                     });
 
-                    log.info(`Member ${i + 1} Round 1 required errors (${memberResult?.requiredFieldErrors.length ?? 0}): ${memberResult?.requiredFieldErrors.join(', ')}`);
-                    log.info(`Member ${i + 1} Round 1 invalid fields  (${memberResult?.invalidFieldErrors.length ?? 0}): ${memberResult?.invalidFieldErrors.join(', ')}`);
-                    log.info(`Member ${i + 1} Round 1 warnings        (${memberResult?.warnings.length ?? 0}): ${memberResult?.warnings.join(' | ')}`);
+                    log.info(`Member ${i + 1} Round 1 required errors (${memberResult?.requiredFieldErrors?.length ?? 0}): ${memberResult?.requiredFieldErrors?.join(', ') ?? 'none'}`);
+                    log.info(`Member ${i + 1} Round 1 invalid fields  (${memberResult?.invalidFieldErrors?.length ?? 0}): ${memberResult?.invalidFieldErrors?.join(', ') ?? 'none'}`);
+                    log.info(`Member ${i + 1} Round 1 warnings        (${memberResult?.warnings?.length ?? 0}): ${memberResult?.warnings?.join(' | ') ?? 'none'}`);
                 }
 
                 log.stepPass(`STEP 4: Round 1 validation completed — missing fields discovered for all ${NUMBER_OF_MEMBERS} members`);
@@ -266,10 +266,15 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                 await emailLogPage.assertEmailDetailMembersAdditionBulkRequestPolicyName(capturedMedicalPolicyName);
                 await emailLogPage.assertAttachmentFileNameContains(APP_CONSTANTS.ATTACHMENTMEMBERLIST);
 
+                const attachmentFilePath = await emailLogPage.downloadAttachmentExcel(
+                    capturedClientName,
+                    capturedMedicalPolicyName
+                );
+
                 for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
                     const member = runtimeMembers[i];
                     log.info(`--- Verifying Member ${i + 1} attachment Excel: ${member.lastName} ---`);
-                    await emailLogPage.downloadAndVerifyAttachmentExcel(capturedClientName, capturedMedicalPolicyName, member);
+                    await emailLogPage.verifyAttachmentExcelRow(attachmentFilePath, i, capturedClientName, capturedMedicalPolicyName, member);
                     log.stepPass(`Member ${i + 1} attachment Excel verified`);
                 }
 

@@ -25,7 +25,18 @@ const loginTestData = loadTestData<LoginTestCase>({
     onlyEnabled: true,
 });
 
+const TC_IDS: Record<string, string> = {
+    'Valid credentials':              'REG_TS01_TC01',
+    'Wrong username and password':    'REG_TS01_TC02',
+    'Empty username only':            'REG_TS01_TC03',
+    'Empty password only':            'REG_TS01_TC04',
+    'Both fields empty':              'REG_TS01_TC05',
+    'User email not specified':       'REG_TS01_TC06',
+};
+
 loginTestData.forEach(({ setName, username, password, expected, errorField, errorMsg }) => {
+
+    const tcId = TC_IDS[setName] ?? setName;
 
     let tcTitle = `BN Login — ${setName}`;
     if (expected === 'success') {
@@ -52,7 +63,7 @@ loginTestData.forEach(({ setName, username, password, expected, errorField, erro
         const basePage = new BasePage(page);
         const loginElement = new LoginElements(page);
 
-        log.tcStart(setName, tcTitle);
+        log.tcStart(tcId, tcTitle);
 
         try {
             log.step('STEP 1: Navigate to application and submit login form');
@@ -75,12 +86,13 @@ loginTestData.forEach(({ setName, username, password, expected, errorField, erro
                     throw e;
                 }
 
-                log.step('STEP 3: Verify login success message element is visible on the page layout');
+                log.step('STEP 3: Verify login success and welcome user message element is visible on the page layout');
                 try {
                     await basePage.waitForElementIsVisible(loginElement.LoginSuccessMessage);
-                    log.stepPass('STEP 3: Success message message is visible');
+                    await loginPage.verifyDashboardWelcomeMessage();
+                    log.stepPass('STEP 3: Success and welcome user message is visible');
                 } catch (e) {
-                    await log.stepFail(page, 'STEP 3: Success message message element not visible or timed out');
+                    await log.stepFail(page, 'STEP 3: Success and welcome user message element not visible or timed out');
                     throw e;
                 }
 
@@ -139,11 +151,20 @@ loginTestData.forEach(({ setName, username, password, expected, errorField, erro
                         try {
                             await basePage.waitForElementIsVisible(loginElement.UserNameError);
                             await basePage.waitForElementIsVisible(loginElement.PasswordError);
-                            await basePage.waitForTextOnPage(errorMsg);
-                            log.info(`Validation error text verified on fields: "${errorMsg}"`);
                             log.stepPass('STEP 2: Simultaneous username and password field validation blocks verified');
                         } catch (e) {
-                            await log.stepFail(page, `STEP 2: Missing expected field validation errors on page layout for error text: "${errorMsg}"`);
+                            await log.stepFail(page, 'STEP 2: Missing expected field validation error elements on page layout');
+                            throw e;
+                        }
+
+                        log.step('STEP 3: Verify main application error alert box is displayed with correct string');
+                        try {
+                            await basePage.waitForElementIsVisible(loginElement.ErrorMessage);
+                            await basePage.waitForTextOnPage(errorMsg);
+                            log.info(`Validation error text verified: "${errorMsg}"`);
+                            log.stepPass('STEP 3: Main error alert text matched expected message');
+                        } catch (e) {
+                            await log.stepFail(page, `STEP 3: Main error alert missing or text mismatch. Expected: "${errorMsg}"`);
                             throw e;
                         }
                         break;

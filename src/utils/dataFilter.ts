@@ -34,7 +34,7 @@ export type FilterType       = 'setName' | 'index';
 export type ComparisonMetric = 'between' | 'equalTo' | 'greaterThan' | 'lessThan' | 'all';
 
 export interface DataFilterOptions {
-    fileName?:    string;          // optional — omit to auto-load ALL JSON files
+    fileName?:    string;
     filterType?:  FilterType;
     comparison?:  ComparisonMetric;
     from?:        string | number;
@@ -42,12 +42,15 @@ export interface DataFilterOptions {
     onlyEnabled?: boolean;
 }
 
-// ─── Constant — single source of truth for the data folder ───────────────────
-//     All JSON files in this folder are auto-discovered.
-//     Files without a "sets":[] array (e.g. benefitnet_test_data.json) are
-//     silently skipped — no changes needed to those files.
-
 const TEST_DATA_DIR = path.resolve(process.cwd(), 'test-data', 'json-files');
+
+// ─── Guard — only log during worker execution, not during collection ──────────
+
+const isWorker = process.env.PW_TEST_WORKER_INDEX !== undefined;
+
+function log(msg: string): void {
+    if (isWorker) console.log(msg);
+}
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
@@ -63,7 +66,6 @@ export function loadTestData<T extends { setName: string; enabled: boolean }>(
         onlyEnabled = true,
     } = options;
 
-    // ── Validate the data folder exists ───────────────────────────────────────
     if (!fs.existsSync(TEST_DATA_DIR)) {
         throw new Error(
             `[loadTestData] Data folder not found:\n` +
@@ -73,14 +75,11 @@ export function loadTestData<T extends { setName: string; enabled: boolean }>(
         );
     }
 
-    // ── ENV FILE OVERRIDE — TEST_FILE=loginTestData npx playwright test ───────
     const envFile = process.env.TEST_FILE ?? options.fileName;
 
-    // ── Resolve which JSON files to load ──────────────────────────────────────
     let filesToLoad: string[] = [];
 
     if (envFile) {
-        // Single file mode
         const singlePath = path.join(TEST_DATA_DIR, `${envFile}.json`);
         if (!fs.existsSync(singlePath)) {
             throw new Error(
@@ -89,10 +88,9 @@ export function loadTestData<T extends { setName: string; enabled: boolean }>(
             );
         }
         filesToLoad = [singlePath];
-        console.log(`[loadTestData] Loading file: ${envFile}.json`);
+        log(`[loadTestData] Loading file: ${envFile}.json`);
 
     } else {
-        // Auto-discover mode — load ALL .json files in the folder
         filesToLoad = getAvailableFilePaths();
         if (filesToLoad.length === 0) {
             throw new Error(
@@ -100,20 +98,17 @@ export function loadTestData<T extends { setName: string; enabled: boolean }>(
                 `Add at least one .json file with a "sets": [] structure.`
             );
         }
-        console.log(`[loadTestData] Auto-discovered ${filesToLoad.length} file(s) in test-data/json-files/:`);
-        filesToLoad.forEach(f => console.log(`  → ${path.basename(f)}`));
+        log(`[loadTestData] Auto-discovered ${filesToLoad.length} file(s) in test-data/json-files/:`);
+        filesToLoad.forEach(f => log(`  → ${path.basename(f)}`));
     }
 
-    // ── Load sets from all resolved files ─────────────────────────────────────
-    // Files without a "sets":[] key (e.g. benefitnet_test_data.json) are
-    // silently skipped — they are not test-set files.
     let allSets: T[] = [];
 
     for (const filePath of filesToLoad) {
         const fileName = path.basename(filePath, '.json');
         const sets     = readSetsFromFile<T>(filePath, fileName);
         if (sets.length > 0) {
-            console.log(`[loadTestData] "${fileName}.json" → ${sets.length} set(s) loaded`);
+            log(`[loadTestData] "${fileName}.json" → ${sets.length} set(s) loaded`);
         }
         allSets = [...allSets, ...sets];
     }
@@ -125,32 +120,28 @@ export function loadTestData<T extends { setName: string; enabled: boolean }>(
         );
     }
 
-    // ── ENV SETS OVERRIDE — TEST_SETS=Set1,Set2 npx playwright test ───────────
     const envSets = process.env.TEST_SETS;
     if (envSets) {
         const envNames = envSets.split(',').map(s => s.trim());
         const filtered = allSets.filter(s => envNames.includes(s.setName));
-        console.log(`[loadTestData] ENV override TEST_SETS="${envSets}" → ${filtered.length} set(s)`);
+        log(`[loadTestData] ENV override TEST_SETS="${envSets}" → ${filtered.length} set(s)`);
         logFinalSets(filtered);
         return filtered;
     }
 
-    // ── Step 1: Apply enabled filter ──────────────────────────────────────────
     if (onlyEnabled) {
         const before  = allSets.length;
         allSets       = allSets.filter(s => s.enabled === true);
         const skipped = before - allSets.length;
         if (skipped > 0) {
-            console.log(`[loadTestData] Skipped ${skipped} disabled set(s)`);
+            log(`[loadTestData] Skipped ${skipped} disabled set(s)`);
         }
     }
 
-    // ── Step 2: Apply comparison filter ───────────────────────────────────────
     if (comparison !== 'all' && (from !== undefined || to !== undefined)) {
         allSets = applyFilter<T>(allSets, filterType, comparison, from, to);
     }
 
-    // ── Validate at least one set remains ─────────────────────────────────────
     if (allSets.length === 0) {
         throw new Error(
             `[loadTestData] No sets matched the filter: ${JSON.stringify(options)}\n` +
@@ -163,7 +154,6 @@ export function loadTestData<T extends { setName: string; enabled: boolean }>(
 }
 
 // ─── Private — read sets from a single JSON file ──────────────────────────────
-// Returns [] silently if the file has no "sets" array (not a test-set file).
 
 function readSetsFromFile<T extends { setName: string; enabled: boolean }>(
     filePath: string,
@@ -181,9 +171,8 @@ function readSetsFromFile<T extends { setName: string; enabled: boolean }>(
         );
     }
 
-    // Not a test-set file — skip silently (e.g. benefitnet_test_data.json)
     if (!Array.isArray(raw.sets)) {
-        console.log(`[loadTestData] Skipping "${fileName}.json" — no "sets": [] found`);
+        log(`[loadTestData] Skipping "${fileName}.json" — no "sets": [] found`);
         return [];
     }
 
@@ -208,8 +197,8 @@ function getAvailableFiles(): string[] {
 // ─── Private — log which sets will run ───────────────────────────────────────
 
 function logFinalSets<T extends { setName: string }>(sets: T[]): void {
-    console.log(`[loadTestData] ${sets.length} set(s) will run:`);
-    sets.forEach((s, i) => console.log(`  ${i + 1}. ${s.setName}`));
+    log(`[loadTestData] ${sets.length} set(s) will run:`);
+    sets.forEach((s, i) => log(`  ${i + 1}. ${s.setName}`));
 }
 
 // ─── Private — setName / index filter logic ───────────────────────────────────
@@ -251,7 +240,6 @@ function applyFilter<T extends { setName: string; enabled: boolean }>(
         }
 
     } else {
-        // index-based filter (1-based)
         const f = Number(from);
         const t = Number(to);
         switch (comparison) {

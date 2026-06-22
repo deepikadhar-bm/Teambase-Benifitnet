@@ -7,7 +7,7 @@ import { testDataManager as tdm } from 'test-data/testDataManager';
 import { NUMBER_OF_MEMBERS, getGenderForMemberIndex, getProfileNameByGender } from 'src/config/memberGenerationConfig';
 
 const TC_ID = 'REG_TS01_TC02';
-const TC_TITLE = `should add ${NUMBER_OF_MEMBERS} principal members via bulk import, export census with validation error comments and verify comments match UI errors for all members`;
+const TC_TITLE = `should export census with validation error comments that match UI errors after bulk import with incomplete member data`;
 
 test.describe('Add Members Bulk — Export Census with Validation Error Comments', () => {
 
@@ -28,6 +28,7 @@ test.describe('Add Members Bulk — Export Census with Validation Error Comments
             log.step('STEP 1: Login to application');
             try {
                 await loginPage.loginToBenefitNetApplication(qaConfig.baseURL, qaConfig.credentials.username, qaConfig.credentials.password);
+                await loginPage.verifyDashboardWelcomeMessage();
                 log.stepPass('STEP 1: Login successful');
             } catch (e) {
                 await log.stepFail(page, 'STEP 1: Login failed');

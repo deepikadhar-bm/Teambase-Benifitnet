@@ -2,6 +2,7 @@ import { expect } from '@playwright/test';
 import { BasePage } from 'src/pages/basePage';
 import { ReportsElements } from 'src/pages/elements/reports';
 import { logger as log } from 'src/helpers/logger';
+import { FileUtils } from 'src/helpers/fileUtils';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -73,11 +74,10 @@ export class ReportPage extends BasePage {
 
     /**
      * Action: Export Generated Workflow Summary Matrices to Excel Spreadsheet Data Object
-     * Steps: Builds platform workspace download pathways, tracks downstream browser system save events, and handles persistent size verification timeouts.
+     * Steps: Resolves TC-scoped download directory, tracks downstream browser system save events, and handles persistent size verification timeouts.
      */
     async exportWorkflowToExcel(): Promise<string> {
-        const downloadDirectory = path.join(process.cwd(), 'downloads');
-        if (!fs.existsSync(downloadDirectory)) fs.mkdirSync(downloadDirectory, { recursive: true });
+        const downloadDirectory = FileUtils.getTcDownloadDir();
 
         const downloadEventPromise = this.page.waitForEvent('download', { timeout: 30000 });
         await this.scrollToElement(this.reportPage.ExportToExcelButton);
@@ -104,17 +104,22 @@ export class ReportPage extends BasePage {
     }
 
     /**
-     * Step Group: SG : WL : Verifying Excel Report Rows For Workflow Member Transactions
+     * Action: Verify Excel Report Rows For Workflow Member Transactions
      * Steps: Parses spreadsheet matrices mapping dynamic columns, loops dataset keys, identifies user indices, and enforces deep-field assertions across properties.
      */
-    async verifyWorkflowExcelMemberRow(filePath: string, runtime: { lastName: string; employeeNumber: string }, capturedClientName: string, capturedMedicalPolicyName: string): Promise<void> {
+    async verifyWorkflowExcelMemberRow(
+        filePath: string,
+        runtime: { lastName: string; employeeNumber: string },
+        capturedClientName: string,
+        capturedMedicalPolicyName: string
+    ): Promise<void> {
 
         const workbook = await XlsxPopulate.fromFileAsync(filePath);
         const worksheet = workbook.sheet('Workflow Logs Report');
 
-        const HEADER_ROW = 8;
+        const HEADER_ROW     = 8;
         const FIRST_DATA_ROW = 9;
-        const MAX_COL = 54;
+        const MAX_COL        = 54;
 
         const headerToCol: Record<string, number> = {};
         for (let c = 1; c <= MAX_COL; c++) {
@@ -145,12 +150,12 @@ export class ReportPage extends BasePage {
         expect(memberDataRow).toBeGreaterThan(0);
         if (memberDataRow < 0) return;
 
-        const memberName = getCell(memberDataRow, 'Member Name');
-        const employeeNo = getCell(memberDataRow, 'Employee Number');
-        const company = getCell(memberDataRow, 'Company');
-        const policy = getCell(memberDataRow, 'Policy');
-        const category = getCell(memberDataRow, 'Category');
-        const relation = getCell(memberDataRow, 'Relation');
+        const memberName  = getCell(memberDataRow, 'Member Name');
+        const employeeNo  = getCell(memberDataRow, 'Employee Number');
+        const company     = getCell(memberDataRow, 'Company');
+        const policy      = getCell(memberDataRow, 'Policy');
+        const category    = getCell(memberDataRow, 'Category');
+        const relation    = getCell(memberDataRow, 'Relation');
         const requestType = getCell(memberDataRow, 'Request Type');
         const nationality = getCell(memberDataRow, 'Nationality');
 
@@ -190,10 +195,11 @@ export class ReportPage extends BasePage {
      * Steps: Controls selection tree interactions, scrolls option layers viewable ranges, handles context-hover dependencies, and sets anchor parameters.
      */
     async selectConsolidatedInsurer(): Promise<void> {
+        await this.waitForElementIsVisible(this.reportPage.consolidatedMembershipListInsurerDropdown);
         await this.click(this.reportPage.consolidatedMembershipListInsurerDropdown);
-        await this.scrollToElement(this.reportPage.consolidatedMembershipListInsurerDropdownOption);
         await this.hover(this.reportPage.consolidatedMembershipListInsurerDropdownOptionTestInsurerHover);
         await this.click(this.reportPage.consolidatedMembershipListInsurerDropdownOptionTestInsurerHover);
+        // await this.scrollIntoView(this.reportPage.consolidatedMembershipListInsurerDropdownOption);
         await this.click(this.reportPage.consolidatedMembershipListInsurerDropdownOption);
         await this.click(this.reportPage.consolidatedMembershipListInsurerLabel);
     }
@@ -235,11 +241,10 @@ export class ReportPage extends BasePage {
 
     /**
      * Action: Export Consolidated Membership Data Matrices out to Physical Excel Sheet
-     * Steps: Initializes storage configurations, attaches to automated event listeners, and evaluates structural asset existence metrics post-download.
+     * Steps: Resolves TC-scoped download directory, attaches to automated event listeners, and evaluates structural asset existence metrics post-download.
      */
     async exportConsolidatedToExcel(): Promise<string> {
-        const downloadDirectory = path.join(process.cwd(), 'downloads');
-        if (!fs.existsSync(downloadDirectory)) fs.mkdirSync(downloadDirectory, { recursive: true });
+        const downloadDirectory = FileUtils.getTcDownloadDir();
 
         const downloadEventPromise = this.page.waitForEvent('download', { timeout: 30000 });
         await this.click(this.reportPage.consolidatedMembershipListPolicyExportToExcelButton);
@@ -258,6 +263,7 @@ export class ReportPage extends BasePage {
             await this.page.waitForTimeout(300);
             waited += 300;
         }
+
         expect(fs.existsSync(savedFilePath)).toBe(true);
         expect(uniqueFileName).toContain('ConsolidatedMembershipList');
         log.info(`Consolidated Excel downloaded: ${uniqueFileName} (${(fs.statSync(savedFilePath).size / 1024).toFixed(1)} KB)`);
@@ -265,18 +271,21 @@ export class ReportPage extends BasePage {
     }
 
     /**
-     * Step Group: SG : CM : Verifying Column Details Inside Consolidated Membership List Row
+     * Action: Verify Column Details Inside Consolidated Membership List Row
      * Steps: Loads output spreadsheet data streams, maps localized multi-column indexing, parses dynamic row items, isolates record IDs, and runs structured verification assertions.
      */
-    async verifyConsolidatedExcelMemberRow(filePath: string, runtime: { firstName: string; lastName: string; employeeNumber: string; email: string; nationalIdNumber: string; maritalStatus?: string }, capturedMedicalPolicyName: string): Promise<void> {
-        // Structure confirmed from file: Row 4 title | Row 5 date | Row 6 headers (57 cols) | Row 7+ data
-        // Max row 10005 pre-allocated — scan col 1 (BenefitNet ID) to find last real row
+    async verifyConsolidatedExcelMemberRow(
+        filePath: string,
+        runtime: { firstName: string; lastName: string; employeeNumber: string; email: string; nationalIdNumber: string; maritalStatus?: string },
+        capturedMedicalPolicyName: string
+    ): Promise<void> {
+
         const workbook = await XlsxPopulate.fromFileAsync(filePath);
         const worksheet = workbook.sheet('Membership List');
 
-        const HEADER_ROW = 6;
+        const HEADER_ROW     = 6;
         const FIRST_DATA_ROW = 7;
-        const MAX_COL = 57;
+        const MAX_COL        = 57;
 
         const headerToCol: Record<string, number> = {};
         for (let c = 1; c <= MAX_COL; c++) {
@@ -304,19 +313,21 @@ export class ReportPage extends BasePage {
         expect(memberDataRow).toBeGreaterThan(0);
         if (memberDataRow < 0) return;
 
-        const benefitNetId = getCell(memberDataRow, 'BenefitNet ID');
-        const firstName = getCell(memberDataRow, 'First Name');
-        const lastName = getCell(memberDataRow, 'Last Name');
-        const employeeNo = getCell(memberDataRow, 'Employee Number');
-        const email = getCell(memberDataRow, 'Email');
-        const nationality = getCell(memberDataRow, 'Nationality');
-        const maritalStatus = getCell(memberDataRow, 'Marital Status');
-        const relation = getCell(memberDataRow, 'Relation');
-        const policy = getCell(memberDataRow, 'Policy');
-        const category = getCell(memberDataRow, 'Category');
-        const countryOfRes = getCell(memberDataRow, 'Country of Residence');
-        const profileStatus = getCell(memberDataRow, 'Member Profile Status');
-        const nationalId = getCell(memberDataRow, 'National ID Number');
+        const benefitNetId   = getCell(memberDataRow, 'BenefitNet ID');
+        const firstName      = getCell(memberDataRow, 'First Name');
+        const lastName       = getCell(memberDataRow, 'Last Name');
+        const employeeNo     = getCell(memberDataRow, 'Employee Number');
+        const email          = getCell(memberDataRow, 'Email');
+        const nationality    = getCell(memberDataRow, 'Nationality');
+        const maritalStatus  = getCell(memberDataRow, 'Marital Status');
+        const relation       = getCell(memberDataRow, 'Relation');
+        const policy         = getCell(memberDataRow, 'Policy');
+        const category       = getCell(memberDataRow, 'Category');
+        const countryOfRes   = getCell(memberDataRow, 'Country of Residence');
+        const profileStatus  = getCell(memberDataRow, 'Member Profile Status');
+        const nationalId     = getCell(memberDataRow, 'National ID Number');
+
+        const expectedMaritalStatus = runtime.maritalStatus ?? 'Married';
 
         log.info(`Consolidated — Row ${memberDataRow} | BenefitNet ID: ${benefitNetId}`);
         log.info(`  First Name     : "${firstName}"  | Expected: "${runtime.firstName}"`);
@@ -328,7 +339,6 @@ export class ReportPage extends BasePage {
         expect(employeeNo).toBe(runtime.employeeNumber);
         expect(email).toBe(runtime.email);
         expect(nationality).toBe('India');
-        const expectedMaritalStatus = runtime.maritalStatus ?? 'Married';
         expect(maritalStatus).toBe(expectedMaritalStatus);
         expect(relation).toBe('Principal');
         expect(policy).toBe(capturedMedicalPolicyName);
@@ -344,7 +354,7 @@ export class ReportPage extends BasePage {
      * Action: Execute Search Filters
      * Steps: Interacts directly with primary execution button instances to run active lookup parameters.
      */
-    async clickSearch() {
+    async clickSearch(): Promise<void> {
         await this.click(this.reportPage.SearchButton);
     }
 }

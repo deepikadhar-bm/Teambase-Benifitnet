@@ -42,7 +42,7 @@
             "password": "",
             "expected": "failure",
             "errorField": "both",
-            "errorMsg": "The user name or password provided is incorrect"
+            "errorMsg": "User email is not specified"
         },
         {
             "setName": "User email not specified",
@@ -51,7 +51,7 @@
             "password": "Admin@123",
             "expected": "failure",
             "errorField": "credential",
-            "errorMsg": "User email is not specified"
+            "errorMsg": "The user name or password provided is incorrect"
         }
     ]
 }

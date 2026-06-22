@@ -61,10 +61,15 @@ export class ClientPage extends BasePage {
     }
 
     async openAddMembersBulkForm(): Promise<void> {
-        await this.waitForElementIsVisible(this.clientPageElements.addMembersBulkButton);
-        await this.assertElementVisible(this.clientPageElements.addMembersBulkButton);
-        await this.click(this.clientPageElements.addMembersBulkButton);
-        await this.waitForElementIsVisible(this.clientPageElements.downloadSampleFileLink);
+        if (await this.assertElementVisible(this.clientPageElements.addMembersBulkButton)) {
+            await this.waitForElementIsVisible(this.clientPageElements.addMembersBulkButton);
+            await this.click(this.clientPageElements.addMembersBulkButton);
+            await this.waitForElementIsVisible(this.clientPageElements.downloadSampleFileLink);
+        } else {
+            await this.waitForElementIsVisible(this.clientPageElements.addMembersBulkButton);
+            await this.click(this.clientPageElements.addMembersBulkButton);
+            await this.waitForElementIsVisible(this.clientPageElements.downloadSampleFileLink);
+        }
     }
 
     async downloadCensusSampleFile(): Promise<string> {
@@ -225,33 +230,66 @@ export class ClientPage extends BasePage {
 
     async assertPreviousValidationErrorsAreResolved(previouslyFailedFields: string[]): Promise<void> {
         if (previouslyFailedFields.length === 0) {
-            log.info('No previously failed fields to check — skipping assertion');
+            log.info('No previously failed fields to check — Round 1 passed clean, skipping assertion');
             return;
         }
+
         await this.waitForElementIsVisible(this.clientPageElements.validationResultsGrid);
+
+        const isSuccess = await this.clientPageElements.validationSuccessBanner.isVisible().catch(() => false);
+        const canProceed = await this.clientPageElements.proceedValidMembersButton.isVisible().catch(() => false);
+
+        if (isSuccess || canProceed) {
+            log.info(`Round 2 validation outcome: ${isSuccess ? 'Validation Successful' : 'Proceed Valid Members'} — all fields resolved`);
+            return;
+        }
+
         const remainingErrors = await this.getValidationErrorFieldNames();
+        log.info(`Remaining errors after Round 2: [${remainingErrors.join(', ')}]`);
+
         for (const fieldName of previouslyFailedFields) {
             const isStillFailing = remainingErrors.some(
                 err => err.toLowerCase().includes(fieldName.toLowerCase())
             );
+            if (isStillFailing) {
+                log.info(`Field still failing after Round 2: "${fieldName}"`);
+            }
             expect(isStillFailing).toBeFalsy();
         }
+
         log.info('All previously failing required fields are now resolved');
     }
 
     async handleValidationOutcomeAndProceedToImport(): Promise<void> {
-        if (await this.clientPageElements.validationSuccessBanner.isVisible()) {
+        await this.page.waitForTimeout(2000);
+
+        const isSuccess = await this.clientPageElements.validationSuccessBanner.isVisible().catch(() => false);
+        const canProceed = await this.clientPageElements.proceedValidMembersButton.isVisible().catch(() => false);
+        const isFailed = await this.clientPageElements.validationFailedBanner.isVisible().catch(() => false);
+
+        log.info(`Validation outcome — Success: ${isSuccess} | ProceedBtn: ${canProceed} | Failed: ${isFailed}`);
+
+        if (isSuccess) {
+            log.info('Validation successful — clicking Import Members');
             await this.clientPageElements.importMembersButton.click();
-        } else if (await this.clientPageElements.proceedValidMembersButton.isVisible()) {
+        } else if (canProceed) {
+            log.info('Some members valid — clicking Proceed Valid Members');
             await this.clientPageElements.proceedValidMembersButton.click();
-        } else if (await this.clientPageElements.validationFailedBanner.isVisible()) {
-            await expect(this.clientPageElements.validationFailedBanner).toBeVisible();
+        } else if (isFailed) {
+            throw new Error('Round 2 validation failed — all members invalid. Check Excel data or application state.');
         }
     }
 
     async assertAddMembersBulkProcessingAndSuccess(): Promise<void> {
         await this.waitForElementIsVisible(this.clientPageElements.addMembersBulkInProgressHeading);
         await this.assertElementVisible(this.clientPageElements.addMembersBulkInProgressHeading);
+        if (!(await this.assertElementVisible(this.clientPageElements.preparingEmailNotificationMessage))) {
+            await this.waitForElementIsVisible(this.clientPageElements.preparingEmailNotificationMessage);
+            await this.waitForElementToDisappear(this.clientPageElements.preparingEmailNotificationMessage);
+        } else {
+            await this.waitForElementIsVisible(this.clientPageElements.preparingEmailNotificationMessage);
+            await this.waitForElementToDisappear(this.clientPageElements.preparingEmailNotificationMessage);
+        }
         await this.waitForElementIsVisible(this.clientPageElements.addMembersBulkSuccessHeading);
         await this.assertElementVisible(this.clientPageElements.addMembersBulkSuccessHeading);
     }

@@ -52,6 +52,11 @@ export class ClientElements {
     get addMembersBulkButton(): Locator {
         return this.named('Add Members Bulk Button',
             this.page.locator(`//a[normalize-space()="Add Members Bulk"]`));
+        // this.page.getByRole("link", { name: 'Add Members Bulk' }));
+    }
+    get preparingEmailNotificationMessage(): Locator {
+        return this.named('Preparing of email notifications...',
+            this.page.locator(`//div[@id="operationStatusMessage"]`));
     }
 
     get downloadSampleFileLink(): Locator {
@@ -158,10 +163,10 @@ export class ClientElements {
         return this.named('Error and Warning Cells',
             this.page.locator(`//tr[contains(@class,'k-group-row-validation-type-error')]//td[@role='gridcell'][last()] | //*[@id='validationResult']//tr//td[last()] | //*[@id='validationResult']//td[contains(@class,'k-last')]`));
     }
-    get ExportCensusValidationErrorComments(): Locator {
-        return this.named('Export Census with Validation Error Comments',
-            this.page.locator(``));
-    }
+    // get ExportCensusValidationErrorComments(): Locator {
+    //     return this.named('Export Census with Validation Error Comments',
+    //         this.page.locator(``));
+    // }
 
     get exportCensusWithValidationErrorCommentsLink(): Locator {
         return this.named('Export Census with Validation Error Comments',

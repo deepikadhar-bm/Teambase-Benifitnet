@@ -542,7 +542,7 @@
       },
       {
         "profileName": "User Profile 2 - Female Principal Member (Round 1 Partial)",
-        "description": "Female member — Round 1 partial upload. Includes gender=Female and email but omits maritalStatus, nationality, relation, category and regulatory fields.",
+        "description": "Female member — Round 1 partial upload. Intentionally omits maritalStatus, nationality, relation, category, establishmentId, uidNumber, fileNumber, passportNumber, phoneNumber, visaIssuanceLocation, workCity, workArea, residentialCity, residentialArea to trigger staged validation discovery.",
         "memberData": {
           "firstName": "Sysla",
           "lastName": "__DYNAMIC__lastName",

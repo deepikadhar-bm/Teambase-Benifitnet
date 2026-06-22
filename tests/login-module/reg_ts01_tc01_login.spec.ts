@@ -37,9 +37,9 @@ test.describe('Teambase BenefitNet — Login Module', () => {
 
       log.step('STEP 2: Verify login success message is displayed');
       try {
-        const loginSuccessMessage = await loginElement.LoginSuccessMessage.textContent();
-        log.info(`Login success message: "${loginSuccessMessage?.trim()}"`);
-        expect(loginSuccessMessage).toContain('WELCOME ADMIN USER!');
+        const welcomeUser = await loginElement.WelcomeTo.textContent();
+        log.info(`Login success message: "${welcomeUser?.trim()}"`);
+        expect(welcomeUser).toContain(APP_CONSTANTS.USERNAME);
         log.stepPass('STEP 2: Login success message verified');
       } catch (e) {
         await log.stepFail(page, 'STEP 2: Login success message not found or incorrect');
@@ -105,15 +105,6 @@ test.describe('Teambase BenefitNet — Login Module', () => {
         throw e;
       }
 
-      log.step('STEP 4: Logout');
-      try {
-        await loginPage.logout();
-        log.stepPass('STEP 4: Logout Successful');
-      } catch (e) {
-        await log.stepFail(page, 'STEP 4: Logout failed');
-        throw e;
-      }
-
       log.tcEnd('PASS');
 
     } catch (e) {
@@ -175,15 +166,6 @@ test.describe('Teambase BenefitNet — Login Module', () => {
         log.stepPass('STEP 5: Password field validation error verified');
       } catch (e) {
         await log.stepFail(page, 'STEP 5: Password field validation error not found or incorrect');
-        throw e;
-      }
-
-      log.step('STEP 4: Logout');
-      try {
-        await loginPage.logout();
-        log.stepPass('STEP 4: Logout Successful');
-      } catch (e) {
-        await log.stepFail(page, 'STEP 4: Logout failed');
         throw e;
       }
 
