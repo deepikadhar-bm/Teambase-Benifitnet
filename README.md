@@ -228,7 +228,7 @@ bash verify-framework.sh
 
 | File | Purpose |
 |---|---|
-| `src/config/env.qa.ts` | QA environment — primary target (`opensource-demo.orangehrmlive.com`) |
+| `src/config/env.qa.ts` | QA environment — primary target (`https://demo.benefitnet.com`) |
 | `src/config/env.dev.ts` | DEV environment configuration |
 | `.env` | Override any environment variable at runtime |
 
