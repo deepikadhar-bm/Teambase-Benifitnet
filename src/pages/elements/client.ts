@@ -54,9 +54,21 @@ export class ClientElements {
             this.page.locator(`//a[normalize-space()="Add Members Bulk"]`));
         // this.page.getByRole("link", { name: 'Add Members Bulk' }));
     }
+    get processingDataText(): Locator {
+        return this.named('Processing data',
+            this.page.locator(`//div[@id="operationStatusMessage" and contains(text(),"Processing data")]`));
+    }
+    get savingDataText(): Locator {
+        return this.named('Saving data',
+            this.page.locator(`//div[@id="operationStatusMessage" and contains(text(),"Saving data")]`));
+    }
+    get startingWorkflowsText(): Locator {
+        return this.named('Starting workflows',
+            this.page.locator(`//div[@id="operationStatusMessage" and contains(text(),"Starting workflows")]`));
+    }
     get preparingEmailNotificationMessage(): Locator {
         return this.named('Preparing of email notifications...',
-            this.page.locator(`//div[@id="operationStatusMessage"]`));
+            this.page.locator(`//div[@id="operationStatusMessage" and contains(text(),"Preparing of email notifications...")]`));
     }
 
     get downloadSampleFileLink(): Locator {

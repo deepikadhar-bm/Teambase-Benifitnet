@@ -1,370 +1,644 @@
-# Teambase BenefitNet — Playwright Automation Framework
+# Teambase BenefitNet — QA Automation Framework
 
-> **Enterprise-grade end-to-end test automation for the Teambase BenefitNet insurance portal — built with Playwright and TypeScript.**
-
-[![Playwright](https://img.shields.io/badge/Playwright-1.61+-45ba4b?logo=playwright)](https://playwright.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.4+-3178c6?logo=typescript)](https://www.typescriptlang.org/)
-[![Node](https://img.shields.io/badge/Node-18+-339933?logo=node.js)](https://nodejs.org/)
-[![CI/CD](https://img.shields.io/badge/CI%2FCD-Jenkins-D24939?logo=jenkins)](https://www.jenkins.io/)
+> **Enterprise-Grade End-to-End Test Automation**
+> Built with Playwright · TypeScript · Page Object Model
+> Version 2.0.0 · Target Application: [demo.benefitnet.com](https://demo.benefitnet.com)
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
-- [Setup](#setup)
-- [Running Tests](#running-tests)
-- [Framework Components](#framework-components)
-- [Test Data Management](#test-data-management)
-- [Excel Step Tracking](#excel-step-tracking)
-- [Reporting](#reporting)
-- [CI/CD](#cicd)
-- [Known Issues & Roadmap](#known-issues--roadmap)
+1. [Framework Overview](#1-framework-overview)
+2. [Technology Stack](#2-technology-stack)
+3. [Framework Architecture](#3-framework-architecture)
+4. [Folder Structure](#4-folder-structure)
+5. [Setup and Installation](#5-setup-and-installation)
+6. [Environment Configuration](#6-environment-configuration)
+7. [Test Execution Commands](#7-test-execution-commands)
+8. [Test Execution Flow](#8-test-execution-flow)
+9. [Core Components](#9-core-components)
+10. [Test Data Management](#10-test-data-management)
+11. [Page Objects and Locators](#11-page-objects-and-locators)
+12. [Logging System](#12-logging-system)
+13. [Reporting and CI/CD](#13-reporting-and-cicd)
+14. [Test Suites](#14-test-suites)
+15. [Framework Best Practices](#15-framework-best-practices)
+16. [Contact and Support](#16-contact-and-support)
 
 ---
 
-## Overview
+## 1. Framework Overview
 
-This framework automates the Teambase BenefitNet insurance portal's bulk member import end-to-end workflow. It validates the complete lifecycle: login → policy navigation → two-round Excel validation → bulk import → email log verification → report Excel verification.
+The Teambase BenefitNet QA Automation Framework is a production-grade, enterprise-level end-to-end test automation solution purpose-built for the BenefitNet insurance member management portal. It automates the complete lifecycle of member operations — from login and bulk member import through email notification verification, Excel attachment validation, and report generation.
 
-**Currently automated:**
-- `REG_TS01_TC01` — Add N principal members via bulk import, verify notification emails, attachment Excel, workflow logs report, and consolidated membership report (11 steps, configurable member count)
-- `REG_TS01_TC02` — Validate bulk import validation-failed Excel matches UI error messages (planned)
-- Login module tests (in progress)
+The framework is designed with three core principles: **scalability** (parameterize once, run for any number of members), **maintainability** (single-responsibility components, no duplication), and **reliability** (auto-healing locators, structured error handling, and IST-timestamped audit logs).
 
----
+### Key Capabilities
 
-## Architecture
-
-The framework follows a strict 4-layer pattern:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│          Spec Layer  (tests/e2e/*.spec.ts)               │
-│  Test orchestration only — no locators, no raw waits     │
-└────────────────────┬────────────────────────────────────┘
-                     │ calls
-┌────────────────────▼────────────────────────────────────┐
-│     Module-Methods Layer  (src/modules-methods/)         │
-│  LoginPage, ClientPage, EmailLogPage, ReportPage         │
-│  Business-action methods — each method = one user action │
-└────────────────────┬────────────────────────────────────┘
-                     │ uses
-┌────────────────────▼────────────────────────────────────┐
-│       Elements Layer  (src/pages/elements/)              │
-│  Pure locator definitions — zero logic, named() pattern  │
-└────────────────────┬────────────────────────────────────┘
-                     │ extends
-┌────────────────────▼────────────────────────────────────┐
-│         BasePage  (src/pages/basePage.ts)                │
-│  click, fill, hover, wait, assert, scroll, upload …     │
-│  Auto-heal on element not found, structured error logging│
-└─────────────────────────────────────────────────────────┘
-```
-
-**Supporting infrastructure:**
-
-| Layer | Location | Purpose |
-|-------|----------|---------|
-| FileUtils | `src/helpers/fileUtils.ts` | Excel/CSV/PDF read-write, step capture, TC context |
-| Logger | `src/helpers/logger.ts` | Structured console + JSON log output |
-| Config | `src/config/` | Environment configs, file paths, member generation config |
-| TestDataManager | `test-data/testDataManager.ts` | Runtime data generation, profile resolution, Excel row building |
-| Constants | `src/constant/app-constants.ts` | App-wide string constants |
+- Full end-to-end automation of the bulk member import workflow including two-round validation
+- Dynamic, data-driven test execution supporting any number of members from a single configuration variable
+- Automated verification of email notifications, Excel attachments, workflow logs, and consolidated membership reports
+- Auto-healing locator engine that recovers from DOM changes without test failure
+- IST-timestamped log files with color-coded console output for instant readability
+- Allure and Playwright HTML dual-reporting with Jenkins CI/CD integration
 
 ---
 
-## Project Structure
+## 2. Technology Stack
+
+| Component | Technology | Version |
+|---|---|---|
+| Test Runner | Playwright Test | ^1.61.0 |
+| Language | TypeScript | ^5.4.5 |
+| Browser | Chromium (primary) | Latest |
+| Excel Processing | xlsx-populate | ^1.21.0 |
+| Excel Parsing | ExcelJS | ^4.4.0 |
+| Schema Validation | Zod | ^4.1.12 |
+| Reporting | Allure + Playwright HTML | ^3.10.0 |
+| CI/CD | Jenkins | Pipeline |
+| Environment Variables | dotenv | ^16.6.1 |
+| Runtime | Node.js | ≥18.x |
+
+---
+
+## 3. Framework Architecture
+
+The framework follows a layered Page Object Model (POM) architecture with strict separation of concerns across five layers:
 
 ```
-teambase/
-├── tests/
-│   ├── e2e/
-│   │   └── reg_ts01_tc01_addMembersBulkEndToEndWorkflow.spec.ts   ← Active E2E spec
-│   ├── login-module/
-│   │   ├── benefitLogin.spec.ts
-│   │   └── benefitLoginDataDriven.spec.ts
-│   └── unused/                    ← Old specs — not included in test run
+┌─────────────────────────────────────────────────────┐
+│                   TEST SPEC LAYER                   │
+│         tests/e2e/*.spec.ts  |  tests/login/*.spec.ts│
+│   Orchestrates test flow, calls module methods only  │
+├─────────────────────────────────────────────────────┤
+│                MODULE METHODS LAYER                  │
+│    src/modules-methods/{login,client,email,report}  │
+│   Business-level actions (login, upload, verify…)   │
+├─────────────────────────────────────────────────────┤
+│                  BASE PAGE LAYER                     │
+│              src/pages/basePage.ts                  │
+│  Core interactions (click, fill, assert, autoHeal)  │
+├─────────────────────────────────────────────────────┤
+│                  ELEMENTS LAYER                      │
+│         src/pages/elements/{login,client…}.ts       │
+│     Named locators only — no logic, no actions      │
+├─────────────────────────────────────────────────────┤
+│              HELPERS & UTILITIES LAYER               │
+│     src/helpers/{logger,fileUtils,validationUtils}  │
+│     src/utils/{autoHeal,retryUtils,waitUtils…}      │
+│         Cross-cutting infrastructure concerns        │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## 4. Folder Structure
+
+```
+Teambase-BenefitNet/
+│
+├── tests/                              # All test specifications
+│   ├── e2e/                            # End-to-end test suites
+│   │   ├── reg_ts01_tc01_addMembersBulkEndToEndWorkflow.spec.ts
+│   │   └── reg_ts01_tc02_bulkImport_exportCensusValidationErrorComments.spec.ts
+│   └── login-module/                   # Login test suites
+│       ├── reg_ts01_tc01_login.spec.ts
+│       └── reg_ts01_tc02_loginDataDriven.spec.ts
 │
 ├── src/
-│   ├── config/
-│   │   ├── env.qa.ts              ← QA environment (baseURL, credentials, timeouts)
-│   │   ├── env.dev.ts             ← Dev environment
-│   │   ├── env.index.ts           ← Config manager (reads ENVIRONMENT variable)
-│   │   ├── fileConstants.ts       ← Download/screenshot path constants
-│   │   ├── memberGenerationConfig.ts ← NUMBER_OF_MEMBERS, GENDER_PATTERN, helpers
-│   │   └── types.ts               ← AppConfig interface
+│   ├── config/                         # Environment and framework configuration
+│   │   ├── env.qa.ts                   # QA environment credentials and timeouts
+│   │   ├── env.dev.ts                  # DEV environment configuration
+│   │   ├── env.index.ts                # Config manager (environment selector)
+│   │   ├── env.schema.ts               # Zod-validated config schema
+│   │   ├── memberGenerationConfig.ts   # NUMBER_OF_MEMBERS, gender pattern, helpers
+│   │   ├── fileConstants.ts            # File path constants (downloads, screenshots)
+│   │   ├── globalTimeout.ts            # Global timeout values
+│   │   └── types.ts                    # AppConfig TypeScript interface
 │   │
 │   ├── constant/
-│   │   └── app-constants.ts       ← TESTINSURER, ATTACHMENTMEMBERLIST, etc.
+│   │   └── app-constants.ts            # Application-level string constants
 │   │
-│   ├── helpers/
-│   │   ├── fileUtils.ts           ← FileUtils class (Excel, CSV, PDF, step capture)
-│   │   └── logger.ts              ← Structured logger (tcStart, step, stepPass, stepFail)
+│   ├── pages/                          # Page Object Model layer
+│   │   ├── basePage.ts                 # Base class with all core interactions
+│   │   └── elements/                  # Locator-only element files
+│   │       ├── login.ts               # Login page locators
+│   │       ├── client.ts              # Client/policy page locators
+│   │       ├── emailLog.ts            # Email log page locators
+│   │       └── reports.ts             # Reports page locators
 │   │
-│   ├── modules-methods/           ← Business action classes
-│   │   ├── loginPage.ts           ← Login/logout
-│   │   ├── clientPage.ts          ← Client navigation, bulk import, Excel write
-│   │   ├── emailPage.ts           ← Email log navigation and assertions
-│   │   └── reportPage.ts          ← Workflow/consolidated report export and verification
+│   ├── modules-methods/               # Business workflow action classes
+│   │   ├── loginPage.ts               # Login/logout actions
+│   │   ├── clientPage.ts              # Bulk import, Excel write, validation
+│   │   ├── emailPage.ts               # Email log navigation and assertions
+│   │   └── reportPage.ts             # Workflow and consolidated report verification
 │   │
-│   ├── pages/
-│   │   ├── basePage.ts            ← All UI interaction primitives
-│   │   └── elements/
-│   │       ├── login.ts           ← Login page locators
-│   │       ├── client.ts          ← Client/bulk-import locators
-│   │       ├── emailLog.ts        ← Email log locators (iframe-aware)
-│   │       └── reports.ts         ← Report page locators
+│   ├── helpers/                       # Cross-cutting utilities
+│   │   ├── logger.ts                  # IST-timestamped logger with color console
+│   │   ├── fileUtils.ts               # Excel, PDF, CSV, download, step capture
+│   │   └── validationUtils.ts         # Non-throwing soft validation helpers
 │   │
-│   └── utils/
-│       ├── autoHeal.ts            ← Self-healing locator fallback
-│       ├── retryUtils.ts          ← Retry with backoff
-│       ├── waitUtils.ts           ← Wait helpers
-│       ├── errorHandler.ts        ← Centralised error wrapping
-│       └── runtimeStore.ts        ← In-memory key-value store across steps
+│   └── utils/                         # Low-level infrastructure utilities
+│       ├── autoHeal.ts                # Auto-healing locator engine v4
+│       ├── waitUtils.ts               # Unified wait handlers with smart labels
+│       ├── retryUtils.ts              # Exponential backoff retry mechanism
+│       ├── errorHandler.ts            # Centralized error capture
+│       └── elementUtils.ts            # Element interaction helpers
 │
-├── test-data/
-│   ├── testDataManager.ts         ← Runtime data generation and profile resolution
+├── test-data/                         # All test data assets
+│   ├── testDataManager.ts             # BenefitNet test data manager class
 │   └── json-files/
-│       ├── benefitnet_test_data.json   ← Excel column schema + allowedValues
-│       └── loginTestData.json
+│       ├── benefitnet_test_data.json  # Member profiles, column schema, defaults
+│       └── loginTestData.json         # Login test credentials
 │
-├── playwright.config.ts
-├── tsconfig.json
-├── package.json
-└── README.md
+├── reports/                           # Custom reporting scripts
+│   ├── qa-reporter.js                 # Post-run reporter (email dispatch)
+│   ├── generate-report.js             # Allure report generator
+│   └── send-email.js                  # Email delivery module
+│
+├── logs/                              # IST-timestamped plain-text run logs
+│   └── test-run-YYYY-MM-DD.log
+│
+├── test-results/                      # Playwright test artifacts (auto-generated)
+│   ├── downloads/                     # Downloaded files scoped by TC ID
+│   │   └── REG_TS01_TC01/
+│   │       ├── steps/                 # Census Excel snapshots (Round 1, Round 2)
+│   │       ├── ImportMembers_*.xlsx
+│   │       ├── ImportMembers_*_Updated.xlsx
+│   │       ├── MemberList_*.xlsx
+│   │       ├── WorkflowLogsReport_*.xlsx
+│   │       └── ConsolidatedMembershipList_*.xlsx
+│   ├── screenshots/                   # Failure screenshots
+│   └── traces/                        # Playwright trace files
+│
+├── allure-report/                     # Generated Allure HTML report
+├── playwright-report/                 # Generated Playwright HTML report
+├── playwright.config.ts               # Playwright global configuration
+├── tsconfig.json                      # TypeScript compiler configuration
+├── Jenkinsfile                        # Jenkins CI/CD pipeline definition
+├── package.json                       # Dependencies and npm scripts
+└── .env                               # Environment variable overrides
 ```
 
 ---
 
-## Setup
+## 5. Setup and Installation
 
 ### Prerequisites
 
-- Node.js 18 or higher
-- npm 9 or higher
+| Requirement | Version |
+|---|---|
+| Node.js | ≥ 18.x |
+| npm | ≥ 9.x |
+| Git | Any recent version |
+| Java (for Allure) | ≥ 11 (optional) |
 
-### Install
+### Installation Steps
+
+**Step 1 — Clone the repository**
 
 ```bash
-# Clone the repository
-git clone <repo-url>
-cd teambase-benefitnet
+git clone 'repository URL'
+cd Teambase-Benifitnet
+```
 
-# Install dependencies
+**Step 2 — Install dependencies**
+
+```bash
 npm install
-
-# Install Playwright browsers
-npx playwright install chromium
 ```
 
-### Environment configuration
+**Step 3 — Install Playwright browsers**
 
-The active environment is controlled by the `ENVIRONMENT` variable (defaults to `qa`).
-
-QA credentials and base URL are in `src/config/env.qa.ts`. Do not commit real credentials — use
-environment variables or a secrets manager in CI.
-
-```typescript
-// src/config/env.qa.ts — Teambase BenefitNet QA environment
-export const qaConfig: AppConfig = {
-  baseURL: "https://demo.benefitnet.com/",
-  credentials: { username: "...", password: "..." },
-  timeouts: { action: 60000, wait: 60000, navigation: 45000 },
-};
+```bash
+npx playwright install --with-deps
 ```
 
-### Configure member count
+**Step 4 — Verify framework integrity**
 
-Edit `src/config/memberGenerationConfig.ts` to control how many members are imported per test run:
-
-```typescript
-export const NUMBER_OF_MEMBERS = 3;  // change to 1, 5, 10, etc.
-
-export const GENDER_PATTERN = ['Male', 'Male', 'Female', 'Female', 'Female', 'Male'];
-// Pattern repeats cyclically — Member 1 = Male, Member 2 = Male, Member 3 = Female, ...
+```bash
+bash verify-framework.sh
 ```
 
 ---
 
-## Running Tests
+## 6. Environment Configuration
+
+### Environment Files
+
+| File | Purpose |
+|---|---|
+| `src/config/env.qa.ts` | QA environment — primary target (`opensource-demo.orangehrmlive.com`) |
+| `src/config/env.dev.ts` | DEV environment configuration |
+| `.env` | Override any environment variable at runtime |
+
+### QA Configuration (`env.qa.ts`)
+
+```typescript
+baseURL:            "Base URL"
+username:           "username"
+action timeout:     60,000 ms
+navigation timeout: 45,000 ms
+browser timeout:    600,000 ms
+```
+
+### Selecting Environment at Runtime
 
 ```bash
-# Run the active E2E spec (headed)
-npx playwright test tests/e2e/reg_ts01_tc01_addMembersBulkEndToEndWorkflow --headed
-
-# Run all tests headless
-npm test
-
-# Run specific environment
+# Run against QA (default)
 cross-env ENVIRONMENT=qa npx playwright test
 
-# Run with UI mode (interactive)
-npx playwright test --ui
-
-# Show last HTML report
-npx playwright show-report
+# Run against DEV
+cross-env ENVIRONMENT=dev npx playwright test
 ```
 
-> **Note:** The active E2E spec uses `test.only` — only the marked test runs when targeting that spec file.
-> Remove `test.only` when running as part of a full suite.
+### Member Count Configuration
+
+The number of members generated per test run is controlled by a single variable in `src/config/memberGenerationConfig.ts`:
+
+```typescript
+export const NUMBER_OF_MEMBERS = 3;  // Change to 2, 5, 10, 100 — no other changes needed
+```
+
+The gender pattern for generated members is also configurable:
+
+```typescript
+export const GENDER_PATTERN = ['Male', 'Male', 'Female', 'Female', 'Female', 'Male'];
+// Repeats cyclically for any NUMBER_OF_MEMBERS value
+```
 
 ---
 
-## Framework Components
+## 7. Test Execution Commands
 
-### BasePage
+### Basic Commands
 
-All page classes extend `BasePage`, which wraps every Playwright interaction with:
-- Auto-wait before action (uses configured `action` timeout)
-- Auto-heal on element not found (tries ARIA role, text, and partial selector fallbacks)
-- Structured pass/fail logging with element names
-- Soft assertion support (`softAssertVisible`, `softAssertText`, `assertNoSoftErrors`)
+```bash
+# Run all tests
+npx playwright test
 
-```typescript
-// Examples from BasePage
-await this.click(this.elements.submitButton);
-await this.fill(this.elements.emailInput, "user@test.com");
-await this.assertElementVisible(this.elements.successBanner);
-await this.waitForElementIsVisible(this.elements.loadingSpinner);
-const text = await this.getText(this.elements.statusLabel);
+# Run all tests headed (visible browser)
+npx playwright test --headed
+
+# Run specific test file
+npx playwright test reg_ts01_tc01_addMembersBulkEndToEndWorkflow.spec.ts
+
+# Run by test ID pattern
+npx playwright test --grep "REG_TS01_TC01"
+
+# Run in debug mode
+npx playwright test --debug
+
+# Run with Playwright UI mode
+npx playwright test --ui
 ```
 
-### Elements pattern
+### Environment-Specific Commands
 
-Locators are defined as named getters using the `named()` helper, which attaches a display name
-for logging without any runtime overhead:
+```bash
+npm run test:qa       # QA environment
+npm run test:dev      # DEV environment
+npm run test:headed   # Headed mode
+```
+
+### Browser and Parallel Commands
+
+```bash
+npm run test:chrome     # Chromium only (default)
+npm run test:firefox    # Firefox
+npm run test:webkit     # WebKit (Safari)
+npm run test:parallel   # 4 parallel workers
+```
+
+### Reporting Commands
+
+```bash
+npm run test:report                                          # Open Playwright HTML report
+npx allure generate allure-results --clean -o allure-report # Generate Allure report
+npx allure open allure-report                               # Open Allure report
+```
+
+---
+
+## 8. Test Execution Flow
+
+The primary end-to-end workflow (`REG_TS01_TC01`) follows this sequence:
+
+```
+STEP 1  Login
+        └─ Navigate to BenefitNet portal → enter credentials → assert success
+
+STEP 2  Navigate to Target Client Policy
+        └─ Sidebar → Clients → capture client name → open policy tab → open bulk add form
+
+STEP 3  Generate Runtime Data
+        └─ For each member: generate unique name, DOB, national ID, passport,
+           phone, email, employee number, UID, file number, establishment ID
+
+STEP 4  Round 1 — Partial Fill (Intentional Validation Discovery)
+        ├─ Build partial Excel rows from Round 1 profile (deliberately missing fields)
+        ├─ Download census sample file → write member rows → capture Excel snapshot
+        ├─ Upload → configure import options → validate
+        └─ Capture UI validation errors per member (required fields + invalid fields)
+
+STEP 5  Round 2 — Complete Fill (All Mandatory Fields)
+        ├─ Download fresh sample file (saved as *_Updated.xlsx)
+        ├─ Build complete Excel rows from Round 2 profile with all mandatory fields
+        ├─ Randomize dropdown values (marital status, member type, salary bracket…)
+        ├─ Store randomized values back into runtimeMembers for later verification
+        ├─ Write → capture Excel snapshot (diff logged vs Round 1) → upload
+        ├─ Assert all Round 1 errors resolved → proceed to import
+        └─ Handle validation outcome (success / proceed valid members)
+
+STEP 6  Assert Import Success
+        └─ Wait for import progress → assert success heading
+
+STEP 7  Verify Notification Emails (per member)
+        └─ Navigate to email logs → filter by client/policy → paginate to member row
+           → assert addition request, notification type, yopmail address, subject
+           → open detail view → assert company, insurer, policy, category, employee number
+
+STEP 8  Verify Insurer Bulk Request Email and Attachment Excel
+        ├─ Open insurer bulk request email
+        ├─ Download MemberList attachment Excel ONCE
+        └─ For each member: verify correct row (row 12 + memberIndex) — last name,
+           employee number, policy, category, relation, marital status, nationality,
+           national ID, email
+
+STEP 9  Verify Workflow Logs Report
+        ├─ Export WorkflowLogsReport Excel
+        └─ For each member: search by Employee Number → assert member name,
+           company, policy, category, relation, request type, nationality
+
+STEP 10 Verify Consolidated Membership Report
+        ├─ Export ConsolidatedMembershipList Excel
+        └─ For each member: search by Employee Number → assert first name, last name,
+           email, nationality, marital status, relation, policy, category,
+           country of residence, member profile status, national ID
+
+STEP 11 Logout
+        └─ Click logout → assert session ended
+```
+
+---
+
+## 9. Core Components
+
+### `playwright.config.ts`
+
+The central Playwright configuration file defining:
+
+- **Test directory:** `./tests`
+- **Global timeout:** 1,800,000 ms (30 minutes) per test — accommodates long import workflows
+- **Expect timeout:** 25,000 ms per assertion
+- **Parallelism:** 4 workers locally, 3 in CI
+- **Artifacts:** Screenshots on failure, video always on, trace always on
+- **Reporters:** HTML + Allure in CI; HTML locally
+- **Browser:** Chromium at 1920×1080
+
+### `basePage.ts`
+
+The foundation class extended by all module method classes. Provides 30+ interaction methods including click, fill, hover, assert, scroll, and dropdown selection. Every interaction routes through `resolveLocator()` which automatically attempts auto-healing before failing — meaning tests recover from minor DOM changes without manual intervention.
+
+### `memberGenerationConfig.ts`
+
+The single control file governing dynamic test data generation. Change `NUMBER_OF_MEMBERS` and every loop, every log line, every verification step in all specs automatically scales — no other file needs touching.
+
+### `fileUtils.ts`
+
+A 29-method utility class managing the complete file lifecycle: TC-scoped downloads, Excel reading and writing, PDF and CSV verification, step snapshot capture with diff logging, and a master download report. All downloaded files are organized under `test-results/downloads/<TC_ID>/` preventing collisions in parallel runs.
+
+---
+
+## 10. Test Data Management
+
+### Architecture
+
+Test data is managed through a three-tier structure: a JSON data file, a TypeScript manager class, and a configuration module.
+
+### `benefitnet_test_data.json`
+
+A single structured JSON file defining the complete BenefitNet import template for `MedicalPolicy1_Syslatech_TestClient1`. It contains:
+
+**Column Schema (53 columns)** — defines every Excel column with its header, field key, mandatory flag, input type, and allowed dropdown values.
+
+**Test Profiles** — named data sets for specific test scenarios:
+
+| Profile Name | Purpose |
+|---|---|
+| User Profile 1 - Male Principal Member (Round 1 Partial) | Round 1 upload — deliberately missing fields to trigger validation |
+| User Profile 1 - Male Principal Member (Round 2 Full) | Round 2 upload — all 31+ mandatory fields populated |
+| User Profile 2 - Female Principal Member (Round 1 Partial) | Female member Round 1 |
+| User Profile 2 - Female Principal Member (Round 2 Full) | Female member Round 2 |
+| Login - Valid Credentials | Standard login test |
+| Login - Invalid Password | Negative login test |
+| Login - Empty Fields | Field validation test |
+
+**Default Field Values** — fallback values for common dropdowns (nationality, country, work city, salary type, etc.)
+
+### `testDataManager.ts`
+
+The central data access class providing profile retrieval, runtime data generation, placeholder resolution, and Excel row building.
+
+### Runtime Data Generation
+
+Each member's runtime data includes auto-generated unique values per run:
+
+| Field | Format | Example |
+|---|---|---|
+| Last Name | `Test` + 5 digits | `Test87485` |
+| Employee Number | `EMP` + 6 digits | `EMP176946` |
+| National ID Number | `NID` + 9 digits | `NID361572292` |
+| UID Number | 9 digits only | `361572292` |
+| File Number | 9 digits only | `844291038` |
+| Passport Number | Letter + 7 digits | `A1234567` |
+| Phone Number | UAE mobile format | `0512345678` |
+| Email | `syslatechNNN@yopmail.com` | `syslatech481@yopmail.com` |
+| Date of Birth | `DD/MM/YYYY` | `14/06/1987` |
+| Addition Date | Current date (IST) | `22/06/2026` |
+
+---
+
+## 11. Page Objects and Locators
+
+### Design Principle
+
+All locators are defined in dedicated element files under `src/pages/elements/`. No locator strings appear in module methods or test specs. Every locator uses the `named()` pattern to attach a human-readable label used throughout all log output.
+
+### `named()` Pattern
 
 ```typescript
-get addMembersBulkButton(): Locator {
-    return this.named('Add Members Bulk Button',
-        this.page.locator(`//button[normalize-space(text())="Add Members Bulk"]`));
+emailLogRowViewLinkByMemberLastName(lastName: string): Locator {
+    return this.named(`Email Log Row View Link: ${lastName}`,
+        this.page.locator('tr')
+            .filter({ hasText: lastName })
+            .getByRole('link', { name: 'View' })
+            .first());
 }
 ```
 
-### Logger
+This makes logs self-documenting — instead of raw XPath strings, every log line shows the element's human name:
 
-```typescript
-log.tcStart(TC_ID, TC_TITLE);   // prints test header block
-log.step('STEP 1: ...');         // marks step start
-log.info('some info');           // info line
-log.stepPass('STEP 1: done');    // green PASS line
-log.stepFail(page, 'STEP 1: ...');  // red FAIL line + screenshot
-log.tcEnd('PASS');               // prints test result footer
+```
+[INFO]  Click → Email Log Row View Link: Test87485
+[PASS]  Clicked → Email Log Row View Link: Test87485
 ```
 
-### FileUtils — Excel step capture
+### iframe Handling
 
-`FileUtils.captureExcelStep` saves a numbered snapshot of any downloaded Excel file to
-`test-results/downloads/<TC_ID>/steps/` and logs a cell-level diff against the previous snapshot:
-
-```typescript
-FileUtils.setTestContext(TC_ID);      // call once at start of test
-await FileUtils.captureExcelStep(filePath, 'Step 9 — workflow export', TC_ID);
-// → saves: test-results/downloads/REG_TS01_TC01/steps/01_WorkflowLogsReport_*.xlsx
-// → logs:  diff of every changed cell vs previous snapshot
-
-// In test.afterAll:
-FileUtils.clearTestContext();
-FileUtils.clearExcelStepHistory(TC_ID);
-```
-
-> **Important on Windows:** Do not call `captureExcelStep` on census template files (XlsxPopulate-written)
-> before `uploadCensusExcelFile` — ExcelJS holds a read lock that blocks `setInputFiles`. Only call it
-> after the upload and validation complete, or use it for report exports only.
+Email detail content renders inside `iframe[id="iframeEmailTempl"]`. The `EmailLogElements` class holds a dedicated `FrameLocator` instance, making iframe scoping transparent to the module methods that call it.
 
 ---
 
-## Test Data Management
+## 12. Logging System
 
-Test profiles live in `test-data/json-files/benefitnet_test_data.json`. Each profile defines which
-fields to populate in the census Excel for a given member type and round:
+The `Logger` class provides dual-output logging: clean color-coded console output for developers and IST-timestamped log files for audit and debugging.
 
-```
-User Profile 1 - Male Principal Member (Round 1 Partial)    ← minimal fields for Round 1
-User Profile 1 - Male Principal Member (Round 2 Full)       ← all mandatory fields for Round 2
-User Profile 2 - Female Principal Member (Round 1 Partial)
-User Profile 2 - Female Principal Member (Round 2 Full)
-```
+### Console vs Log File
 
-Runtime data (names, employee numbers, UIDs, etc.) is generated fresh each run via `testDataManager`:
+| Output | Timestamps | Purpose |
+|---|---|---|
+| Console | None — clean readability | Developer feedback during test run |
+| `logs/test-run-YYYY-MM-DD.log` | Full IST timestamps | Audit trail, post-run debugging |
 
-```typescript
-const runtimeData = tdm.generateRuntimeDataForGender('Male');
-// → { firstName: 'Sysla', lastName: 'Test72064', employeeNumber: 'EMP638174', ... }
+Log files are appended across multiple runs on the same day and use IST (`Asia/Kolkata`) timezone throughout.
 
-const profile = tdm.getProfile('User Profile 1 - Male Principal Member (Round 2 Full)');
-const resolved = tdm.resolvePlaceholders(profile.memberData, runtimeData, policyCategory);
-const excelRow = tdm.buildExcelRow(resolved);
-// → { "First Name (*)": "Sysla", "Last Name (*)": "Test72064", ... }
-```
+### Log Levels
 
-Dropdown fields that can be randomised are picked via `getDropdownValues(fieldKey)` and `pickRandom(arr)`:
-
-```typescript
-const values = getDropdownValues('maritalStatus');  // reads from benefitnet_test_data.json
-resolvedData.maritalStatus = pickRandom(values);    // e.g. 'Married', 'Single', 'Widowed'
-```
+| Level | Console Color | Usage |
+|---|---|---|
+| `STEP` | Bold White | Step boundary markers with elapsed time |
+| `PASS` | Bold Green | Successful assertions and actions |
+| `INFO` | Cyan | Informational messages and captured values |
+| `WARN` | Bold Yellow | Warnings, auto-heal notifications |
+| `ERROR` | Bold Red | Errors before throw |
+| `FAIL` | White on Red | Failed step with screenshot |
+| `DEBUG` | Dim Gray | Verbose diagnostic output |
 
 ---
 
-## Reporting
+## 13. Reporting and CI/CD
 
-**HTML Report** (always generated):
+### Playwright HTML Report
+
+Auto-generated at `playwright-report/index.html`. Includes per-test pass/fail status, steps, screenshots, video recordings, and network traces.
+
 ```bash
 npx playwright show-report
 ```
 
-**Allure Report** (requires allure CLI):
+### Allure Report
+
+Rich interactive report with test history, trends, and step-level detail:
+
 ```bash
 npx allure generate allure-results --clean -o allure-report
 npx allure open allure-report
 ```
 
-**JSON log files** are written to `logs/` after each run, containing full step-by-step details.
+### Custom QA Reporter
+
+A Playwright reporter plugin (`reports/qa-reporter.js`) fires after all tests complete. It packages test artifacts into a ZIP and optionally sends an email summary:
+
+```bash
+# Auto email on run completion
+AUTO_SEND_EMAIL=true npx playwright test
+
+# Manual email trigger
+node reports/send-email.js
+```
+
+### Jenkins Pipeline
+
+The CI/CD pipeline (`Jenkinsfile`) defines five stages:
+
+| Stage | Action |
+|---|---|
+| Checkout Code | Pull from GitHub `main` branch |
+| Install Dependencies | `npm install` |
+| Install Playwright Browsers | `npx playwright install --with-deps` |
+| Run Playwright Tests | `npx playwright test --retries=2` — build marked UNSTABLE on failure |
+| Generate Allure Report | Generate HTML report using Allure CLI |
+
+**CI-specific behavior:** headless mode enforced, 3 workers, 1 retry on failure, `forbidOnly` blocks any `.only` test from being pushed.
 
 ---
 
-## CI/CD
+## 14. Test Suites
 
-Jenkins pipeline is defined in `Jenkinsfile`. Key stages:
+### REG_TS01_TC01 — Add Members Bulk End-to-End Workflow
 
-1. **Install** — `npm ci`
-2. **Test** — `cross-env ENVIRONMENT=qa npx playwright test`
-3. **Report** — Allure report generation + email notification via `reports/send-email.js`
-4. **Archive** — HTML report, screenshots, traces attached to build
+**File:** `tests/e2e/reg_ts01_tc01_addMembersBulkEndToEndWorkflow.spec.ts`
 
-Environment variables for CI: `ENVIRONMENT`, `BASE_URL`, `QA_USERNAME`, `QA_PASSWORD`
+The primary regression test covering the complete member addition lifecycle across 11 steps from login through consolidated membership report verification. Supports any member count via `NUMBER_OF_MEMBERS`.
+
+**Covered validations:**
+- Two-round Excel upload with staged validation discovery
+- Per-member email notification content (subject, company, insurer, policy, category, employee number)
+- MemberList attachment Excel — row-level verification per member
+- Workflow Logs report — employee number search and field assertions
+- Consolidated Membership report — 12-field assertion per member including dynamic marital status
+
+### REG_TS01_TC02 — Bulk Import Export Census Validation Error Comments
+
+**File:** `tests/e2e/reg_ts01_tc02_bulkImport_exportCensusValidationErrorComments.spec.ts`
+
+Validates that the "Export Census with Validation Error Comments" Excel file accurately reflects validation errors shown in the UI after a Round 1 partial upload.
+
+**Covered validations:**
+- Required field error messages match between UI and Excel `Validation Comments` column
+- Invalid field error messages match between UI and Excel
+
+### REG_TS01_TC01 — Login Valid Credentials
+
+**File:** `tests/login-module/reg_ts01_tc01_login.spec.ts`
+
+Standard login verification: navigate → enter valid credentials → assert success message.
+
+### REG_TS01_TC02 — Login Data-Driven
+
+**File:** `tests/login-module/reg_ts01_tc02_loginDataDriven.spec.ts`
+
+Data-driven login test covering valid, invalid password, and empty field scenarios from `loginTestData.json`.
 
 ---
 
-## Known Issues & Roadmap
+## 15. Framework Best Practices
 
-### Active bugs
+### Separation of Concerns
 
-| # | Severity | Description | Fix |
-|---|----------|-------------|-----|
-| 1 | High | `assertEmailLogRowExistsForToYopEmail` — args swapped, locator never matches | Swap to `(toEmail, memberLastName)` in emailPage.ts |
-| 2 | Medium | Download paths inconsistent (`downloads/` vs `test-results/downloads/`) | Standardise to `FILE_PATHS.DOWNLOADS` in emailPage + reportPage |
-| 3 | Medium | `downloadAndVerifyAttachmentExcel` always reads row 12 — fails for member 2+ | Scan by employee number like `verifyWorkflowExcelMemberRow` |
-| 4 | Medium | `loginPage.login()` method missing — login spec and unused specs broken | Add `login()` alias or update callers |
-| 5 | Low | `waitForTimeout(2000)` hardcoded in `assertEmailDetailRequestSubmittedToInsurer` | Replace with `waitFor({ state: 'visible' })` |
+Every layer has a single responsibility. Test specs orchestrate; module methods implement business actions; base page handles interactions; elements hold locators; helpers provide infrastructure. No layer reaches into another layer's responsibility.
 
-### Test coverage gaps
+### Zero Hardcoded Counts
 
-- **HR email verification** — `selectNotifyHrOption` is called but no step verifies the HR notification email was sent or its contents
-- **Login negative tests** — `benefitLogin.spec.ts` references stale APIs and needs rewriting
-- **TC02 validation-failed Excel** — spec exists in `unused/` but is not active
+Member count, gender pattern, profile names, and dropdown values are all derived from configuration or JSON data. Adding a new member profile requires only a JSON entry — no spec code changes.
 
-### Roadmap
+### Named Locators
 
-- [ ] Fix arg swap in `assertEmailLogRowExistsForToYopEmail`
-- [ ] Standardise download paths to `FILE_PATHS.DOWNLOADS`
-- [ ] Fix attachment Excel verification to scan by employee number
-- [ ] Add HR email verification step
-- [ ] Rewrite `benefitLogin.spec.ts` using current `loginToBenefitNetApplication` API
-- [ ] Replace `any[]` types with typed interfaces (`RuntimeMember`, etc.)
-- [ ] Activate `REG_TS01_TC02` validation-failed Excel spec
-- [ ] Add `TC02` to CI pipeline
+Every locator uses the `named()` pattern. Log output is always human-readable — element names appear in every log line, eliminating the need to cross-reference locator files when reading logs.
+
+### TC-Scoped Downloads
+
+All downloaded files are organized under `test-results/downloads/<TC_ID>/`, preventing cross-test file collisions in parallel runs and enabling easy artifact navigation after a run.
+
+### Round-Distinguished File Naming
+
+Census files use an optional suffix to distinguish import rounds:
+- `ImportMembers_*_<timestamp>.xlsx` — Round 1 original
+- `ImportMembers_*_<timestamp>_Updated.xlsx` — Round 2 corrected
+
+### Surgical Changes Only
+
+All framework modifications follow a minimal-diff principle — existing JSDoc, method signatures, and logic are preserved unless the change specifically targets them. This keeps Git history clean and reviewable.
+
+### Retry and Auto-Heal
+
+Network delays, DOM re-renders, and element timing variations are handled automatically — `retryUtils` for action-level retries, `autoHeal` for locator recovery through a 9-strategy waterfall. Tests are never cluttered with manual `waitForTimeout` calls.
+
+### Audit Trail
+
+Every test run produces a timestamped IST log file. Screenshots are captured on any `stepFail`. Playwright records video and trace for every test. The combination ensures no failure is ever undiagnosable.
+
+---
+
+*This document serves as the primary reference for clients, QA engineers, developers, and new team members onboarding to the Teambase BenefitNet automation framework.*

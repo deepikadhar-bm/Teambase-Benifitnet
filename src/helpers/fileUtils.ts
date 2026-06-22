@@ -1173,21 +1173,67 @@ export class FileUtils {
     fs.copyFileSync(filePath, copyPath);
     logger.info(`[ExcelStep ${count}] "${stepLabel}" → saved: ${copyName}`);
 
-    // ── 4. Read current rows (skipped for large report exports > 100KB) ──────
+    // ── 4. Read current rows (dynamic — uses XlsxPopulate to read only actual data rows) ──
     let currentRows: Array<Record<string, unknown>> = [];
-    const fileSizeKb = fs.statSync(filePath).size / 1024;
-    if (fileSizeKb <= 100) {
-      try {
-        const raw = await FileUtils.readExcel(filePath, sheetName);
-        currentRows = raw as Array<Record<string, unknown>>;
-      } catch (error) {
-        logger.warn(
-          `[ExcelStep ${count}] Could not read rows for diff — ` +
-          `${error instanceof Error ? error.message : String(error)}`
-        );
+    try {
+      const XlsxPopulate = require('xlsx-populate').default || require('xlsx-populate');
+      const wb = await XlsxPopulate.fromFileAsync(filePath);
+      const ws = wb.sheet(0);
+
+      // ── Detect actual populated rows by scanning col 1 (max 600) ─────────
+      let lastPopulatedRow = 0;
+      for (let r = 1; r <= 600; r++) {
+        const val = ws.cell(r, 1).value();
+        if (val !== null && val !== undefined && String(val).trim() !== '') {
+          lastPopulatedRow = r;
+        }
       }
-    } else {
-      logger.info(`[ExcelStep ${count}] Diff skipped — large report file (${fileSizeKb.toFixed(1)} KB), snapshot saved only`);
+      logger.info(`[ExcelStep ${count}] Actual populated rows detected: ${lastPopulatedRow}`);
+
+      if (lastPopulatedRow > 500) {
+        // Report export — too many rows, skip diff
+        logger.info(`[ExcelStep ${count}] Diff skipped — report export (${lastPopulatedRow}+ rows), snapshot saved only`);
+      } else {
+        // Census file — read only actual rows directly via XlsxPopulate (avoids ExcelJS full parse hang)
+        const MAX_COL = 60;
+        const headers: Record<number, string> = {};
+
+        // Find header row (first row where col 2 has a value ending with (*) or is 'BenefitNet ID')
+        let headerRow = 1;
+        for (let r = 1; r <= lastPopulatedRow; r++) {
+          const c2 = String(ws.cell(r, 2).value() ?? '');
+          if (c2.includes('(*)') || c2 === 'First Name (*)' || c2 === 'BenefitNet ID') {
+            headerRow = r;
+            break;
+          }
+        }
+
+        // Build header map
+        for (let c = 1; c <= MAX_COL; c++) {
+          const hdr = ws.cell(headerRow, c).value();
+          if (hdr) headers[c] = String(hdr).trim();
+        }
+
+        // Read data rows
+        for (let r = headerRow + 1; r <= lastPopulatedRow; r++) {
+          const rowData: Record<string, unknown> = {};
+          for (let c = 1; c <= MAX_COL; c++) {
+            if (headers[c]) {
+              const val = ws.cell(r, c).value();
+              if (val !== null && val !== undefined) {
+                rowData[headers[c]] = val;
+              }
+            }
+          }
+          if (Object.keys(rowData).length > 0) currentRows.push(rowData);
+        }
+        logger.info(`[ExcelStep ${count}] Read ${currentRows.length} data row(s) for diff`);
+      }
+    } catch (error) {
+      logger.warn(
+        `[ExcelStep ${count}] Could not read rows for diff — ` +
+        `${error instanceof Error ? error.message : String(error)}`
+      );
     }
 
     // ── 5. Diff against previous snapshot ───────────────────────────────────

@@ -117,9 +117,9 @@ export class ReportPage extends BasePage {
         const workbook = await XlsxPopulate.fromFileAsync(filePath);
         const worksheet = workbook.sheet('Workflow Logs Report');
 
-        const HEADER_ROW     = 8;
+        const HEADER_ROW = 8;
         const FIRST_DATA_ROW = 9;
-        const MAX_COL        = 54;
+        const MAX_COL = 54;
 
         const headerToCol: Record<string, number> = {};
         for (let c = 1; c <= MAX_COL; c++) {
@@ -150,12 +150,12 @@ export class ReportPage extends BasePage {
         expect(memberDataRow).toBeGreaterThan(0);
         if (memberDataRow < 0) return;
 
-        const memberName  = getCell(memberDataRow, 'Member Name');
-        const employeeNo  = getCell(memberDataRow, 'Employee Number');
-        const company     = getCell(memberDataRow, 'Company');
-        const policy      = getCell(memberDataRow, 'Policy');
-        const category    = getCell(memberDataRow, 'Category');
-        const relation    = getCell(memberDataRow, 'Relation');
+        const memberName = getCell(memberDataRow, 'Member Name');
+        const employeeNo = getCell(memberDataRow, 'Employee Number');
+        const company = getCell(memberDataRow, 'Company');
+        const policy = getCell(memberDataRow, 'Policy');
+        const category = getCell(memberDataRow, 'Category');
+        const relation = getCell(memberDataRow, 'Relation');
         const requestType = getCell(memberDataRow, 'Request Type');
         const nationality = getCell(memberDataRow, 'Nationality');
 
@@ -283,9 +283,9 @@ export class ReportPage extends BasePage {
         const workbook = await XlsxPopulate.fromFileAsync(filePath);
         const worksheet = workbook.sheet('Membership List');
 
-        const HEADER_ROW     = 6;
+        const HEADER_ROW = 6;
         const FIRST_DATA_ROW = 7;
-        const MAX_COL        = 57;
+        const MAX_COL = 57;
 
         const headerToCol: Record<string, number> = {};
         for (let c = 1; c <= MAX_COL; c++) {
@@ -296,9 +296,11 @@ export class ReportPage extends BasePage {
         const getCell = (row: number, col: string): string =>
             String(worksheet.cell(row, headerToCol[col] ?? 0).value() ?? '').trim();
 
-        let lastDataRow = FIRST_DATA_ROW;
-        for (let r = FIRST_DATA_ROW; r <= 10000; r++) {
-            if (String(worksheet.cell(r, 1).value() ?? '').trim() === '') break;
+        const EMP_COL = headerToCol['Employee Number'] ?? 14;
+        const MAX_SCAN = 500;
+        let lastDataRow = FIRST_DATA_ROW - 1;
+        for (let r = FIRST_DATA_ROW; r <= FIRST_DATA_ROW + MAX_SCAN; r++) {
+            if (String(worksheet.cell(r, EMP_COL).value() ?? '').trim() === '') break;
             lastDataRow = r;
         }
         const totalRows = lastDataRow - FIRST_DATA_ROW + 1;
@@ -313,19 +315,19 @@ export class ReportPage extends BasePage {
         expect(memberDataRow).toBeGreaterThan(0);
         if (memberDataRow < 0) return;
 
-        const benefitNetId   = getCell(memberDataRow, 'BenefitNet ID');
-        const firstName      = getCell(memberDataRow, 'First Name');
-        const lastName       = getCell(memberDataRow, 'Last Name');
-        const employeeNo     = getCell(memberDataRow, 'Employee Number');
-        const email          = getCell(memberDataRow, 'Email');
-        const nationality    = getCell(memberDataRow, 'Nationality');
-        const maritalStatus  = getCell(memberDataRow, 'Marital Status');
-        const relation       = getCell(memberDataRow, 'Relation');
-        const policy         = getCell(memberDataRow, 'Policy');
-        const category       = getCell(memberDataRow, 'Category');
-        const countryOfRes   = getCell(memberDataRow, 'Country of Residence');
-        const profileStatus  = getCell(memberDataRow, 'Member Profile Status');
-        const nationalId     = getCell(memberDataRow, 'National ID Number');
+        const benefitNetId = getCell(memberDataRow, 'BenefitNet ID');
+        const firstName = getCell(memberDataRow, 'First Name');
+        const lastName = getCell(memberDataRow, 'Last Name');
+        const employeeNo = getCell(memberDataRow, 'Employee Number');
+        const email = getCell(memberDataRow, 'Email');
+        const nationality = getCell(memberDataRow, 'Nationality');
+        const maritalStatus = getCell(memberDataRow, 'Marital Status');
+        const relation = getCell(memberDataRow, 'Relation');
+        const policy = getCell(memberDataRow, 'Policy');
+        const category = getCell(memberDataRow, 'Category');
+        const countryOfRes = getCell(memberDataRow, 'Country of Residence');
+        const profileStatus = getCell(memberDataRow, 'Member Profile Status');
+        const nationalId = getCell(memberDataRow, 'National ID Number');
 
         const expectedMaritalStatus = runtime.maritalStatus ?? 'Married';
 

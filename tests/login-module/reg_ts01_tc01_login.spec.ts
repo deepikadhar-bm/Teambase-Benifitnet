@@ -35,33 +35,24 @@ test.describe('Teambase BenefitNet — Login Module', () => {
         throw e;
       }
 
-      log.step('STEP 2: Verify login success message is displayed');
+      log.step('STEP 2: Verify welcome message displays correct username');
       try {
         const welcomeUser = await loginElement.WelcomeTo.textContent();
-        log.info(`Login success message: "${welcomeUser?.trim()}"`);
-        expect(welcomeUser).toContain(APP_CONSTANTS.USERNAME);
-        log.stepPass('STEP 2: Login success message verified');
-      } catch (e) {
-        await log.stepFail(page, 'STEP 2: Login success message not found or incorrect');
-        throw e;
-      }
-
-      log.step('STEP 3: Verify welcome message displays correct username');
-      try {
+        log.info(`Login welcome message: "${welcomeUser?.trim()}"`);
         await expect(loginElement.WelcomeTo).toContainText(APP_CONSTANTS.USERNAME);
         log.info(`Welcome message verified for user: ${APP_CONSTANTS.USERNAME}`);
-        log.stepPass('STEP 3: Welcome message username verified');
+        log.stepPass('STEP 2: Welcome message username verified');
       } catch (e) {
-        await log.stepFail(page, 'STEP 3: Welcome message username mismatch');
+        await log.stepFail(page, 'STEP 2: Welcome message username mismatch');
         throw e;
       }
 
-      log.step('STEP 4: Logout');
+      log.step('STEP 3: Logout');
       try {
         await loginPage.logout();
-        log.stepPass('STEP 4: Logout Successful');
+        log.stepPass('STEP 3: Logout Successful');
       } catch (e) {
-        await log.stepFail(page, 'STEP 4: Logout failed');
+        await log.stepFail(page, 'STEP 3: Logout failed');
         throw e;
       }
 

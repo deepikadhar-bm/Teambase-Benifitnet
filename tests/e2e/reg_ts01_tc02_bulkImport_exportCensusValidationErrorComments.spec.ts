@@ -1,10 +1,11 @@
 import { test } from '@playwright/test';
 import { LoginPage } from 'src/modules-methods/loginPage';
-import { ClientPage } from 'src/modules-methods/clientPage';
+import { ClientPage, MemberValidationResult } from 'src/modules-methods/clientPage';
 import { qaConfig } from 'src/config/env.qa';
 import { logger as log } from 'src/helpers/logger';
 import { testDataManager as tdm } from 'test-data/testDataManager';
 import { NUMBER_OF_MEMBERS, getGenderForMemberIndex, getProfileNameByGender } from 'src/config/memberGenerationConfig';
+import { FileUtils } from 'src/helpers/fileUtils';
 
 const TC_ID = 'REG_TS01_TC02';
 const TC_TITLE = `should export census with validation error comments that match UI errors after bulk import with incomplete member data`;
@@ -19,13 +20,19 @@ test.describe('Add Members Bulk — Export Census with Validation Error Comments
         clientPage = new ClientPage(page);
     });
 
+    test.afterAll(async () => {
+        FileUtils.clearTestContext();
+        FileUtils.clearExcelStepHistory(TC_ID);
+    });
+
     test(TC_TITLE, async ({ page }) => {
 
+        FileUtils.setTestContext(TC_ID);
         log.tcStart(TC_ID, TC_TITLE);
 
         try {
 
-            log.step('STEP 1: Login to application');
+            log.step('STEP 1: Login to application with valid broker credentials');
             try {
                 await loginPage.loginToBenefitNetApplication(qaConfig.baseURL, qaConfig.credentials.username, qaConfig.credentials.password);
                 await loginPage.verifyDashboardWelcomeMessage();
@@ -35,26 +42,25 @@ test.describe('Add Members Bulk — Export Census with Validation Error Comments
                 throw e;
             }
 
-            log.step('STEP 2: Navigate to target client policy and open bulk add form');
+            log.step('STEP 2: Navigate to target client policy and open bulk member import form');
             try {
                 await clientPage.navigateToClientsViasidebar();
                 await clientPage.openTargetClientDetails();
                 const capturedClientName = clientPage.capturedClientName;
                 await clientPage.openPolicyTab(capturedClientName);
                 await clientPage.openAddMembersBulkForm();
-                log.stepPass('STEP 2: Navigated to bulk add form');
+                log.stepPass('STEP 2: Bulk import form opened successfully');
             } catch (e) {
-                await log.stepFail(page, 'STEP 2: Failed to navigate to bulk add form');
+                await log.stepFail(page, 'STEP 2: Failed to navigate to bulk import form');
                 throw e;
             }
 
             const capturedMedicalPolicyName = clientPage.capturedMedicalPolicyName;
             const policyCategory = `Cat A_ ${capturedMedicalPolicyName}`;
 
-            // Generate runtime data for all members dynamically
             const runtimeMembers: any[] = [];
 
-            log.step(`STEP 3: Generate runtime data for ${NUMBER_OF_MEMBERS} members`);
+            log.step(`STEP 3: Generate unique runtime test data for ${NUMBER_OF_MEMBERS} principal members`);
             try {
                 for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
                     const gender = getGenderForMemberIndex(i);
@@ -62,20 +68,21 @@ test.describe('Add Members Bulk — Export Census with Validation Error Comments
                     runtimeMembers.push(runtimeData);
                     log.info(`Member ${i + 1}: ${runtimeData.firstName} ${runtimeData.lastName} | Gender: ${gender} | EmpNo: ${runtimeData.employeeNumber}`);
                 }
-                log.stepPass(`STEP 3: Runtime data generated for all ${NUMBER_OF_MEMBERS} members`);
+                log.stepPass(`STEP 3: Unique runtime data generated for all ${NUMBER_OF_MEMBERS} members`);
             } catch (e) {
-                await log.stepFail(page, 'STEP 3: Failed to generate runtime data');
+                await log.stepFail(page, 'STEP 3: Failed to generate runtime test data');
                 throw e;
             }
 
-            log.step('STEP 4: Initial validation pass — partial fill for all members to trigger validation failures');
+            let uiErrorsPerMemberFinal: Map<number, MemberValidationResult> = new Map();
+
+            log.step(`STEP 4: Upload census with intentionally incomplete data to expose mandatory field validation errors for all ${NUMBER_OF_MEMBERS} members`);
             try {
                 const initialValidationExcelRows: any[] = [];
 
                 for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
                     const gender = getGenderForMemberIndex(i);
                     const profileName = getProfileNameByGender(gender, 1, 'Partial');
-
                     const initialValidationProfile = tdm.getProfile(profileName);
                     const initialValidationExcelRow = tdm.buildExcelRow(
                         tdm.resolvePlaceholders(initialValidationProfile.memberData, runtimeMembers[i], policyCategory)
@@ -85,43 +92,35 @@ test.describe('Add Members Bulk — Export Census with Validation Error Comments
 
                 const initialValidationFilePath = await clientPage.downloadCensusSampleFile();
                 await clientPage.writeMultipleMembersToExcelFile(initialValidationFilePath, initialValidationExcelRows);
+                await FileUtils.captureExcelStep(initialValidationFilePath, 'Incomplete Census — mandatory field validation trigger', TC_ID);
                 await clientPage.uploadCensusExcelFile(initialValidationFilePath);
                 await clientPage.selectImportTypeOption();
                 await clientPage.selectNotifyHrOption();
                 await clientPage.selectNotifyMemberOption();
                 await clientPage.clickValidateImportButton();
 
-                const uiErrorsPerMember = await clientPage.getValidationErrorsPerMember();
-
-                for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
-                    const memberResult = uiErrorsPerMember.get(i);
-                    log.info(`Member ${i + 1} Initial validation required errors (${memberResult?.requiredFieldErrors.length ?? 0}): ${memberResult?.requiredFieldErrors.join(', ')}`);
-                    log.info(`Member ${i + 1} Initial validation invalid fields  (${memberResult?.invalidFieldErrors.length ?? 0}): ${memberResult?.invalidFieldErrors.join(', ')}`);
-                    log.info(`Member ${i + 1} Initial validation warnings        (${memberResult?.warnings.length ?? 0}): ${memberResult?.warnings.join(' | ')}`);
-                }
-
-                log.stepPass(`STEP 4: Initial validation pass completed — mandatory fields identified for all ${NUMBER_OF_MEMBERS} members`);
-
-                var uiErrorsPerMemberFinal = uiErrorsPerMember;
+                uiErrorsPerMemberFinal = await clientPage.getValidationErrorsPerMember();
+                log.stepPass(`STEP 4: Mandatory field validation errors captured for all ${NUMBER_OF_MEMBERS} members`);
             } catch (e) {
-                await log.stepFail(page, 'STEP 4: Initial validation pass failed unexpectedly');
+                await log.stepFail(page, 'STEP 4: Incomplete census validation did not trigger expected field errors');
                 throw e;
             }
 
             log.step(`STEP 5: Export census with validation error comments and verify comments match UI errors for all ${NUMBER_OF_MEMBERS} members`);
             try {
                 const validationFailedExcelPath = await clientPage.downloadValidationFailedCensusExcel();
+                await FileUtils.captureExcelStep(validationFailedExcelPath, 'Validation Failed Census — error comments exported', TC_ID);
                 await clientPage.assertValidationFailedExcelMatchesUiErrors(validationFailedExcelPath, uiErrorsPerMemberFinal);
-                log.stepPass(`STEP 5: Census with validation error comments verified — all comments match UI errors for all ${NUMBER_OF_MEMBERS} members`);
+                log.stepPass(`STEP 5: Validation error comments verified — all comments match UI errors for all ${NUMBER_OF_MEMBERS} members`);
             } catch (e) {
-                await log.stepFail(page, 'STEP 5: Census with validation error comments does not match UI errors');
+                await log.stepFail(page, 'STEP 5: Census validation error comments do not match UI errors');
                 throw e;
             }
 
-            log.step('STEP 6: Logout');
+            log.step('STEP 6: Logout from application');
             try {
                 await loginPage.logout();
-                log.stepPass('STEP 6: Logout Successful');
+                log.stepPass('STEP 6: Logout successful');
             } catch (e) {
                 await log.stepFail(page, 'STEP 6: Logout failed');
                 throw e;

@@ -74,7 +74,7 @@ export class ClientPage extends BasePage {
         }
     }
 
-    async downloadCensusSampleFile(): Promise<string> {
+    async downloadCensusSampleFile(suffix?: string): Promise<string> {
         if (!fs.existsSync(this.DOWNLOAD_DIR)) fs.mkdirSync(this.DOWNLOAD_DIR, { recursive: true });
 
         await this.waitForElementIsVisible(this.clientPageElements.downloadSampleFileLink);
@@ -83,7 +83,8 @@ export class ClientPage extends BasePage {
         const downloadedFile = await downloadEventPromise;
 
         const baseFileName = downloadedFile.suggestedFilename().replace('.xlsx', '');
-        const uniqueFileName = `${baseFileName}_${this.istFileTimestamp()}.xlsx`;
+        const suffixPart = suffix ? `_${suffix}` : '';
+        const uniqueFileName = `${baseFileName}_${this.istFileTimestamp()}${suffixPart}.xlsx`;
         const savedFilePath = path.join(this.DOWNLOAD_DIR, uniqueFileName);
 
         await downloadedFile.saveAs(savedFilePath);
@@ -222,9 +223,9 @@ export class ClientPage extends BasePage {
             const allErrors = [...requiredFieldErrors, ...invalidFieldErrors];
             memberErrorMap.set(memberIdx, { memberIndex: memberIdx, requiredFieldErrors, invalidFieldErrors, warnings, allErrors });
 
-            log.info(`  Member[${memberIdx}] required errors (${requiredFieldErrors.length}): [${requiredFieldErrors.join(', ')}]`);
-            log.info(`  Member[${memberIdx}] invalid fields  (${invalidFieldErrors.length}): [${invalidFieldErrors.join(', ')}]`);
-            log.info(`  Member[${memberIdx}] warnings        (${warnings.length}): [${warnings.join(' | ')}]`);
+            log.info(`  Member[${memberIdx}] mandatory errors : (${requiredFieldErrors.length}) ${requiredFieldErrors.join(', ') || 'none'}`);
+            log.info(`  Member[${memberIdx}] invalid errors   : (${invalidFieldErrors.length}) ${invalidFieldErrors.join(', ') || 'none'}`);
+            log.info(`  Member[${memberIdx}] warnings         : (${warnings.length}) ${warnings.join(' | ') || 'none'}`);
         }
 
         return memberErrorMap;
@@ -285,13 +286,13 @@ export class ClientPage extends BasePage {
     async assertAddMembersBulkProcessingAndSuccess(): Promise<void> {
         await this.waitForElementIsVisible(this.clientPageElements.addMembersBulkInProgressHeading);
         await this.assertElementVisible(this.clientPageElements.addMembersBulkInProgressHeading);
-        if (!(await this.assertElementVisible(this.clientPageElements.preparingEmailNotificationMessage))) {
-            await this.waitForElementIsVisible(this.clientPageElements.preparingEmailNotificationMessage);
-            await this.waitForElementToDisappear(this.clientPageElements.preparingEmailNotificationMessage);
-        } else {
-            await this.waitForElementIsVisible(this.clientPageElements.preparingEmailNotificationMessage);
-            await this.waitForElementToDisappear(this.clientPageElements.preparingEmailNotificationMessage);
-        }
+        await this.waitForElementIsVisible(this.clientPageElements.processingDataText);
+        // await this.waitForElementIsVisible(this.clientPageElements.savingDataText);
+        // await this.waitForElementToDisappear(this.clientPageElements.savingDataText);
+        await this.waitForElementIsVisible(this.clientPageElements.startingWorkflowsText);
+        // await this.waitForElementToDisappear(this.clientPageElements.startingWorkflowsText);
+        await this.waitForElementIsVisible(this.clientPageElements.preparingEmailNotificationMessage);
+        await this.waitForElementToDisappear(this.clientPageElements.preparingEmailNotificationMessage);
         await this.waitForElementIsVisible(this.clientPageElements.addMembersBulkSuccessHeading);
         await this.assertElementVisible(this.clientPageElements.addMembersBulkSuccessHeading);
     }
@@ -353,7 +354,16 @@ export class ClientPage extends BasePage {
             }
 
             await workbook.toFileAsync(filePath);
-            log.info(`Excel saved: ${filePath} (${memberRows.length} members, rows ${writtenDataRows.join(', ')})`);
+
+            // Verify file is ready and non-zero after write
+            let waited = 0;
+            while (waited < 10000) {
+                if (fs.existsSync(filePath) && fs.statSync(filePath).size > 0) break;
+                await new Promise(resolve => setTimeout(resolve, 300));
+                waited += 300;
+            }
+            log.info(`Excel saved: ${filePath} (${memberRows.length} members, rows ${writtenDataRows.join(', ')})`)
+
             return writtenDataRows;
 
         } catch (error) {
@@ -408,7 +418,10 @@ export class ClientPage extends BasePage {
             : undefined;
 
         if (!validationCommentsColIndex) throw new Error('Validation Comments column not found in Excel file');
-        log.info(`Validation Comments column at index ${validationCommentsColIndex}`);
+        log.info(`Validation Comments column found at index ${validationCommentsColIndex}`);
+
+        const divider = '─'.repeat(60);
+        let allPassed = true;
 
         for (const [memberIndex, result] of uiErrorsPerMember) {
             const dataRowNumber = headerRowNumber + 1 + memberIndex;
@@ -416,34 +429,55 @@ export class ClientPage extends BasePage {
                 worksheet.cell(dataRowNumber, validationCommentsColIndex).value() ?? ''
             ).trim();
 
-            log.info(`Member[${memberIndex}] (Excel row ${dataRowNumber})`);
-            log.info(`  UI required errors : [${result.requiredFieldErrors.join(', ')}]`);
-            log.info(`  UI invalid fields  : [${result.invalidFieldErrors.join(', ')}]`);
-            log.info(`  Excel comments     : "${excelComments}"`);
-
-            const excelCommentSegments = excelComments
+            const totalUiErrors = result.requiredFieldErrors.length + result.invalidFieldErrors.length;
+            const excelSegments = excelComments
                 .split(';')
                 .map(s => s.trim())
                 .filter(s => s.length > 0);
 
+            log.info(divider);
+            log.info(`Member ${memberIndex + 1} — Excel Row ${dataRowNumber} | Expected ${totalUiErrors} error(s) to appear in Validation Comments`);
+            log.info(divider);
+            log.info(`UI Mandatory Field Errors (${result.requiredFieldErrors.length}): ${result.requiredFieldErrors.join(', ') || 'none'}`);
+            log.info(`UI Invalid Field Errors   (${result.invalidFieldErrors.length}): ${result.invalidFieldErrors.join(', ') || 'none'}`);
+            log.info(`Excel Comments            : "${excelComments}"`);
+            log.info(divider);
+
+            let memberPassed = true;
+
             for (const fieldName of result.requiredFieldErrors) {
-                const found = excelCommentSegments.some(
+                const found = excelSegments.some(
                     seg => seg.toLowerCase().includes(fieldName.toLowerCase())
                 );
                 expect(found).toBe(true);
-                log.info(`Required error "${fieldName}" confirmed in Excel comments`);
+                if (found) {
+                    log.info(`[MATCH] Mandatory field error "${fieldName}" — confirmed in Excel comments`);
+                } else {
+                    log.info(`[MISS]  Mandatory field error "${fieldName}" — NOT found in Excel comments`);
+                    memberPassed = false;
+                    allPassed = false;
+                }
             }
 
             for (const fieldName of result.invalidFieldErrors) {
-                const found = excelCommentSegments.some(
+                const found = excelSegments.some(
                     seg => seg.toLowerCase().includes(fieldName.toLowerCase())
                 );
                 expect(found).toBe(true);
-                log.info(`   Invalid error "${fieldName}" confirmed in Excel comments`);
+                if (found) {
+                    log.info(`[MATCH] Invalid field error  "${fieldName}" — confirmed in Excel comments`);
+                } else {
+                    log.info(`[MISS]  Invalid field error  "${fieldName}" — NOT found in Excel comments`);
+                    memberPassed = false;
+                    allPassed = false;
+                }
             }
+
+            log.info(`Member ${memberIndex + 1} verification: ${memberPassed ? 'PASS — all errors matched' : 'FAIL — one or more errors missing'}`);
         }
 
-        log.info(`Validation Failed Excel — all ${uiErrorsPerMember.size} member(s) verified`);
+        log.info(divider);
+        log.info(`Validation Failed Excel — all ${uiErrorsPerMember.size} member(s) verified: ${allPassed ? 'ALL PASSED' : 'FAILURES DETECTED'}`);
     }
 
     private parseValidationCellText(
