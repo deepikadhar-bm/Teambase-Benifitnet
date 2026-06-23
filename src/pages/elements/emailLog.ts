@@ -5,7 +5,7 @@ export class EmailLogElements {
     private readonly emailFrame: FrameLocator;
 
     constructor(public readonly page: Page) {
-        this.emailFrame = page.frameLocator('iframe[id="iframeEmailTempl"]');
+        this.emailFrame = page.frameLocator('#iframeEmailTempl');
     }
 
     private named(name: string, locator: Locator): Locator {
@@ -108,6 +108,30 @@ export class EmailLogElements {
             this.page.locator(`//h3[contains(normalize-space(.), "Member Addition Bulk Request")]`));
     }
 
+    // ── Insurer email row — "To:" address in email log table ─────────────────
+    insurerBulkRequestEmailToRow(clientName: string, insurerToEmail: string): Locator {
+        return this.named(`Insurer Bulk Request Email To: ${insurerToEmail}`,
+            this.page.locator(`//tr//td[@colspan="2"]//small[.//span[contains(text(),"Subject: ")] and contains(text()," [${clientName}] Member Addition Bulk Request")]/..//small[span[contains(text(),"To:")] and contains(text(),"${insurerToEmail}")]`));
+    }
+
+    // ── Insurer email row — "View" button next to "To:" address ──────────────
+    insurerBulkRequestEmailToViewButton(clientName: string, insurerToEmail: string): Locator {
+        return this.named(`Insurer Bulk Request Email To View Button: ${insurerToEmail}`,
+            this.page.locator(`//tr//td[@colspan="2"]//small[.//span[contains(text(),"Subject: ")] and contains(text()," [${clientName}] Member Addition Bulk Request")]/..//small[span[contains(text(),"To:")] and contains(text(),"${insurerToEmail}")]/../..//td[5]//a`));
+    }
+
+    // ── Insurer email detail — "To:" address field inside detail view ─────────
+    insurerBulkRequestEmailToInDetails(insurerToEmail: string): Locator {
+        return this.named(`Insurer Bulk Request Email To In Details: ${insurerToEmail}`,
+            this.page.locator(`//h5[span[contains(text(), "To:")] and contains(., "${insurerToEmail}")]`));
+    }
+
+    // ── Insurer email detail — body paragraph text (inside iframe) ───────────
+    get insurerBulkRequestTableParaText(): Locator {
+        return this.named('Insurer Bulk Request Table Paragraph Text',
+            this.emailFrame.locator(`//p[contains(normalize-space(.), "Please find the following Member Addition Bulk request. Please note that all the member details are attached in the form of an Excel spreadsheet in your format for your convenience.")]`));
+    }
+
     get emailDetailToAddressField(): Locator {
         return this.named('Email Detail To Address Field',
             this.page.locator(`//h5[span[text()="To: "]]`));
@@ -185,6 +209,10 @@ export class EmailLogElements {
 
     get MemberAdditionBulkRequestMemberListAttachmentLink(): Locator {
         return this.named('Member List Attachment Download Link',
+            this.page.locator(`//div[contains(@class,"file-box")]//a[contains(@href,".xlsx")]`));
+    }
+    get memberAdditionReportAttachmentLink(): Locator {
+        return this.named('Member Addition Report Attachment Download Link',
             this.page.locator(`//div[contains(@class,"file-box")]//a[contains(@href,".xlsx")]`));
     }
 

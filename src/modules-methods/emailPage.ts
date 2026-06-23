@@ -163,6 +163,30 @@ export class EmailLogPage extends BasePage {
         await this.waitForElementIsVisible(this.emailLog.insurerBulkRequestSubject);
         await this.assertElementVisible(this.emailLog.insurerBulkRequestSubject);
     }
+    async assertInsurerEmailTo(clientName: string, emailTo: string): Promise<void> {
+        await this.waitForElementIsVisible(this.emailLog.insurerBulkRequestEmailToRow(clientName, emailTo));
+        await this.assertElementVisible(this.emailLog.insurerBulkRequestEmailToRow(clientName, emailTo));
+        log.info(`Insurer email row confirmed in log table — To: ${emailTo} | Client: ${clientName}`);
+    }
+
+    async assertInsurerEmailToViewButton(clientName: string, emailTo: string): Promise<void> {
+        await this.waitForElementIsVisible(this.emailLog.insurerBulkRequestEmailToViewButton(clientName, emailTo));
+        await this.assertElementVisible(this.emailLog.insurerBulkRequestEmailToViewButton(clientName, emailTo));
+        await this.click(this.emailLog.insurerBulkRequestEmailToViewButton(clientName, emailTo));
+        log.info(`Insurer email "View" button confirmed — To: ${emailTo}`);
+    }
+
+    async assertInsurerEmailTableParaText(): Promise<void> {
+        await this.waitForElementIsVisible(this.emailLog.insurerBulkRequestTableParaText);
+        await this.assertElementVisible(this.emailLog.insurerBulkRequestTableParaText);
+        log.info('Insurer email body confirmed — member addition bulk request paragraph present');
+    }
+
+    async assertInsurerEmailToInEmailLogDetails(emailTo: string): Promise<void> {
+        await this.waitForElementIsVisible(this.emailLog.insurerBulkRequestEmailToInDetails(emailTo));
+        await this.assertElementVisible(this.emailLog.insurerBulkRequestEmailToInDetails(emailTo));
+        log.info(`Insurer email detail — To address confirmed: ${emailTo}`);
+    }
 
     /**
      * Action: Assert Destination Recipient Value Properties Mirror Intended Routing Parameters
@@ -403,5 +427,42 @@ export class EmailLogPage extends BasePage {
         expect(email).toBe(runtime.email);
 
         log.info(`Attachment Excel — Member ${memberIndex + 1} (row ${DATA_ROW}) all verifications passed`);
+    }
+
+    async downloadAndVerifyMemberAdditionReportExcel(
+        capturedMedicalPolicyName: string,
+        expectedTpaName: string,
+        expectedEndorsementType: string,
+        members: Array<{ lastName: string; employeeNumber: string }>
+    ): Promise<void> {
+
+        const attachmentLink = this.emailLog.memberAdditionReportAttachmentLink;
+        await this.waitForElementIsVisible(attachmentLink);
+
+        const downloadDirectory = FileUtils.getTcDownloadDir();
+        const downloadEventPromise = this.page.waitForEvent('download');
+        await this.click(attachmentLink);
+        const downloadedFile = await downloadEventPromise;
+
+        const uniqueFileName = `${downloadedFile.suggestedFilename()}`;
+        const savedFilePath = path.join(downloadDirectory, uniqueFileName);
+        await downloadedFile.saveAs(savedFilePath);
+
+        let waited = 0;
+        while (waited < 10000) {
+            if (fs.existsSync(savedFilePath) && fs.statSync(savedFilePath).size > 0) break;
+            await this.page.waitForTimeout(300);
+            waited += 300;
+        }
+
+        log.info(`Member Addition Report downloaded: ${savedFilePath}`);
+
+        await FileUtils.verifyMemberAdditionReportExcel(
+            savedFilePath,
+            members,
+            capturedMedicalPolicyName,
+            expectedTpaName,
+            expectedEndorsementType
+        );
     }
 }

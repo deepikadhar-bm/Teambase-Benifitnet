@@ -1083,6 +1083,133 @@ export class FileUtils {
   }
 
   // ==========================================================================
+  // 30. verifyMemberAdditionReportExcel
+  // --------------------------------------------------------------------------
+  // Verifies the downloaded MemberAdditionReport Excel against expected values.
+  //
+  // Structure:
+  //   Sheet    : DATA
+  //   Row 1    : Column headers
+  //   Row 2+   : One member per row (n rows supported dynamically)
+  //
+  // Columns verified per member row:
+  //   Beneficiary_last_name  → DATA col "LastName"
+  //   Staff_No               → DATA col "EmployeeNumber"
+  //   Policy Name            → DATA col "Policy"
+  //   TPA Name               → DATA col "Carrier"
+  //   Endorsement Type       → DATA col "RequestType"
+  //
+  // Usage in spec:
+  //   await FileUtils.verifyMemberAdditionReportExcel(filePath, runtimeMembers, capturedMedicalPolicyName);
+  //
+  // Where runtimeMembers is an array of objects with:
+  //   { lastName: string; employeeNumber: string }
+  // ==========================================================================
+  static async verifyMemberAdditionReportExcel(
+    filePath: string,
+    members: Array<{ lastName: string; employeeNumber: string }>,
+    expectedPolicyName: string,
+    expectedTpaName?: string,
+    expectedEndorsementType?: string
+  ): Promise<void> {
+
+    const XlsxPopulate = require('xlsx-populate').default || require('xlsx-populate');
+    const workbook = await XlsxPopulate.fromFileAsync(filePath);
+    const dataSheet = workbook.sheet('DATA');
+
+    if (!dataSheet) {
+      throw new Error(`Sheet "DATA" not found in ${path.basename(filePath)}`);
+    }
+
+    const MAX_COL = 100;
+    const headerToCol: Record<string, number> = {};
+    for (let c = 1; c <= MAX_COL; c++) {
+      const hdr = dataSheet.cell(1, c).value();
+      if (hdr) headerToCol[String(hdr).trim()] = c;
+    }
+
+    logger.info(`MemberAdditionReport — DATA headers mapped: ${Object.keys(headerToCol).length} columns`);
+
+    const requiredHeaders = ['LastName', 'EmployeeNumber', 'Policy', 'Carrier', 'RequestType'];
+    for (const col of requiredHeaders) {
+      if (!headerToCol[col]) {
+        throw new Error(`Required column "${col}" not found in DATA sheet headers`);
+      }
+    }
+
+    const getCell = (row: number, colName: string): string =>
+      String(dataSheet.cell(row, headerToCol[colName] ?? 0).value() ?? '').trim();
+
+    const FIRST_DATA_ROW = 2;
+    let lastDataRow = FIRST_DATA_ROW - 1;
+    for (let r = FIRST_DATA_ROW; r <= 10000; r++) {
+      if (String(dataSheet.cell(r, headerToCol['EmployeeNumber']).value() ?? '').trim() === '') break;
+      lastDataRow = r;
+    }
+
+    const totalDataRows = lastDataRow - FIRST_DATA_ROW + 1;
+    logger.info(`MemberAdditionReport — DATA rows found: ${totalDataRows}`);
+
+    if (totalDataRows < members.length) {
+      throw new Error(
+        `MemberAdditionReport has ${totalDataRows} data row(s) but expected at least ${members.length}`
+      );
+    }
+
+    for (let i = 0; i < members.length; i++) {
+      const expectedMember = members[i];
+      const dataRow = FIRST_DATA_ROW + i;
+
+      const actualLastName = getCell(dataRow, 'LastName');
+      const actualStaffNo = getCell(dataRow, 'EmployeeNumber');
+      const actualPolicy = getCell(dataRow, 'Policy');
+      const actualTpa = getCell(dataRow, 'Carrier');
+      const actualEndorsementType = getCell(dataRow, 'RequestType');
+
+      logger.info(`MemberAdditionReport — Member ${i + 1} (row ${dataRow}):`);
+      logger.info(`  Beneficiary Last Name  : "${actualLastName}" | Expected: "${expectedMember.lastName}"`);
+      logger.info(`  Staff No               : "${actualStaffNo}" | Expected: "${expectedMember.employeeNumber}"`);
+      logger.info(`  Policy Name            : "${actualPolicy}" | Expected to contain: "${expectedPolicyName}"`);
+      logger.info(`  TPA Name               : "${actualTpa}"${expectedTpaName ? ` | Expected: "${expectedTpaName}"` : ''}`);
+      logger.info(`  Endorsement Type       : "${actualEndorsementType}"${expectedEndorsementType ? ` | Expected: "${expectedEndorsementType}"` : ''}`);
+
+      if (actualLastName !== expectedMember.lastName) {
+        throw new Error(
+          `Member ${i + 1} — Beneficiary Last Name mismatch. Expected: "${expectedMember.lastName}" | Actual: "${actualLastName}"`
+        );
+      }
+
+      if (actualStaffNo !== expectedMember.employeeNumber) {
+        throw new Error(
+          `Member ${i + 1} — Staff No mismatch. Expected: "${expectedMember.employeeNumber}" | Actual: "${actualStaffNo}"`
+        );
+      }
+
+      if (!actualPolicy.includes(expectedPolicyName)) {
+        throw new Error(
+          `Member ${i + 1} — Policy Name should contain "${expectedPolicyName}" | Actual: "${actualPolicy}"`
+        );
+      }
+
+      if (expectedTpaName && actualTpa !== expectedTpaName) {
+        throw new Error(
+          `Member ${i + 1} — TPA Name mismatch. Expected: "${expectedTpaName}" | Actual: "${actualTpa}"`
+        );
+      }
+
+      if (expectedEndorsementType && actualEndorsementType !== expectedEndorsementType) {
+        throw new Error(
+          `Member ${i + 1} — Endorsement Type mismatch. Expected: "${expectedEndorsementType}" | Actual: "${actualEndorsementType}"`
+        );
+      }
+
+      logger.pass(`MemberAdditionReport — Member ${i + 1} (${expectedMember.lastName}) all verifications passed`);
+    }
+
+    logger.pass(`MemberAdditionReport Excel — all ${members.length} member row(s) verified`);
+  }
+
+  // ==========================================================================
   // 25. setTestContext
   // --------------------------------------------------------------------------
   // Call once at the start of each test.
