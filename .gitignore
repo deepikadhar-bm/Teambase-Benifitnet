@@ -18,7 +18,7 @@ playwright-report/
 test-results/
 coverage/
 .nyc_output/
-reports/
+reports/html-reports-zip
 
 # Allure Reports
 allure-results/
@@ -54,10 +54,6 @@ Thumbs.db
 desktop.ini
 *.bak
 
-# Playwright
-.auth/
-.cache/
-
 # Temporary Files
 *.tmp
 *.temp
@@ -82,7 +78,6 @@ desktop.ini
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+.auth/
+.cache/
 downloads/
-
-# Playwright
-/playwright-report/
