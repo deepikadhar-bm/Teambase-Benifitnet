@@ -44,10 +44,12 @@ export default defineConfig({
     navigationTimeout: configManager.getTimeout('navigation'),
 
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',   // saves video only on failure
+    video: {
+      mode: 'on',  // or 'on'
+      size: { width: 1280, height: 720 }
+    }, 
     trace: 'retain-on-failure',   // saves trace only on failure
   },
-
   projects: [
     {
       name: 'chromium',
