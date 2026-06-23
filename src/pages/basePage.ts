@@ -11,13 +11,13 @@ import { Runtime } from "../utils/runtimeStore";
 import { logger as log } from "../helpers/logger";
 import { autoHeal } from "../utils/autoHeal";
 
-declare module "../helpers/logger" {
-  interface Logger {
-    step(msg: string, data?: any): void;
-  }
-}
+// declare module "../helpers/logger" {
+//   interface Logger {
+//     step(msg: string, data?: any): void;
+//   }
+// }
 
-(log as any).step = log.info.bind(log);
+// (log as any).step = log.info.bind(log);
 
 type CompareOp = "==" | "!=" | "contains" | "!contains" | ">" | ">=" | "<" | "<=";
 
@@ -191,7 +191,8 @@ export class BasePage {
   // Example: await base.click(el.submitButton);
   async click(selector: string | Locator, options?: { force?: boolean; label?: string }): Promise<this> {
     const name = this.getElementName(selector, options?.label);
-    log.step(`Click → ${name}`);
+    // log.step(`Click → ${name}`);
+    log.info(`Click → ${name}`)
     return ErrorHandler.handle<this>(async () => {
       const resolved = await this.resolveLocator(selector, name);
       await resolved.click({ timeout: configManager.getTimeout("action"), force: options?.force });

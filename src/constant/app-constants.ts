@@ -7,4 +7,5 @@ export const APP_CONSTANTS = {
   ATTACHMENTMEMBERLIST: "MemberList",
   FALLBACK_HEADER_ROW_INDEX: 7,
   HEADER_DETECTION_KEYWORDS: ['First Name', 'BenefitNet ID', 'Date Of Birth', '(*)'],
+  NUMBER_OF_MEMBERS: 3,
 };

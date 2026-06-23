@@ -1,3 +1,4 @@
+import { APP_CONSTANTS } from 'src/constant/app-constants';
 import testData from 'test-data/json-files/benefitnet_test_data.json';
 
 /**
@@ -8,7 +9,7 @@ import testData from 'test-data/json-files/benefitnet_test_data.json';
 
 // ==================== CONFIGURATION ====================
 // Number of members to generate for each test
-export const NUMBER_OF_MEMBERS = 3;
+export const NUMBER_OF_MEMBERS = APP_CONSTANTS.NUMBER_OF_MEMBERS;
 
 // Gender pattern - will repeat based on NUMBER_OF_MEMBERS
 // Example: ['Male', 'Male', 'Female', 'Female', 'Female', 'Male']
