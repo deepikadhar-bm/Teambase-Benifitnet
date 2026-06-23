@@ -1651,6 +1651,10 @@ Runtime.clear();
 ### Sending the Report by Email
 
 ```bash
+
+# Install these 3 dependencies
+npm install archiver nodemailer dotenv
+
 # Manual trigger
 node reports/send-email.js
 
