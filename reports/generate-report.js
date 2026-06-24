@@ -8,6 +8,10 @@
 //    playwright-report/   — full HTML report (open index.html in browser)
 //    test-results/        — screenshots, videos, traces
 //    logs/                — plain text log files + screenshots from this run
+//
+//  Retention policy:
+//    Only the last 5 ZIPs are kept per project name.
+//    Older ZIPs are automatically deleted after each new one is created.
 // ============================================================================
 
 const fs = require("fs");
@@ -28,6 +32,9 @@ const REPORT_SRC = path.join(ROOT_DIR, "playwright-report");
 const TEST_RESULTS_DIR = path.join(ROOT_DIR, "test-results");
 const LOGS_DIR = path.join(ROOT_DIR, "logs");
 const ZIP_OUTPUT_DIR = path.join(__dirname, "html-reports-zip");
+
+// ── How many ZIPs to keep per project ────────────────────────────────────────
+const MAX_ZIPS_TO_KEEP = 5;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,10 +70,40 @@ function findExistingZip(projectName) {
     return zips.length > 0 ? zips[0] : null;
 }
 
+/**
+ * Deletes older ZIPs for the given project, keeping only the MAX_ZIPS_TO_KEEP newest.
+ * Called automatically after every new ZIP is created.
+ */
+function pruneOldZips(projectName) {
+    if (!fs.existsSync(ZIP_OUTPUT_DIR)) return;
+
+    const allZips = fs.readdirSync(ZIP_OUTPUT_DIR)
+        .filter(f => f.startsWith(`${projectName}-`) && f.endsWith(".zip"))
+        .map(f => ({
+            fileName: f,
+            filePath: path.join(ZIP_OUTPUT_DIR, f),
+            createdAt: fs.statSync(path.join(ZIP_OUTPUT_DIR, f)).mtimeMs,
+        }))
+        .sort((a, b) => b.createdAt - a.createdAt);   // newest first
+
+    // Keep the first MAX_ZIPS_TO_KEEP, delete the rest
+    const toDelete = allZips.slice(MAX_ZIPS_TO_KEEP);
+
+    for (const zip of toDelete) {
+        try {
+            fs.unlinkSync(zip.filePath);
+        } catch (err) {
+            // Non-fatal — log but continue
+            console.error(`[generate-report] Could not delete old ZIP: ${zip.fileName} — ${err.message}`);
+        }
+    }
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 /**
  * Generate a ZIP archive of the current Playwright test run.
+ * After creation, automatically prunes old ZIPs keeping only the last 5.
  * @param {string} projectName  Used as ZIP filename prefix.
  * @returns {Promise<{ zipFileName: string, zipPath: string }>}
  */
@@ -91,7 +128,6 @@ async function generateReport(projectName = getProjectName()) {
     // ── Return existing ZIP if already generated for this run ────────────────
     const existing = findExistingZip(projectName);
     if (existing) {
-        // console.log(`  Reusing existing ZIP: ${existing.zipFileName}`);
         return existing;
     }
 
@@ -111,8 +147,9 @@ async function generateReport(projectName = getProjectName()) {
         const archive = archiver("zip", { zlib: { level: 9 } });
 
         output.on("close", () => {
-            const sizeMB = (archive.pointer() / 1024 / 1024).toFixed(1);
-            // console.log(`  Report ZIP    : ${zipFileName} (${sizeMB} MB)`);
+            // ── Prune old ZIPs — keep only the last MAX_ZIPS_TO_KEEP ─────────
+            pruneOldZips(projectName);
+
             resolve({ zipFileName, zipPath });
         });
 
@@ -170,6 +207,6 @@ module.exports = { generateReport };
 if (require.main === module) {
     const projectName = getProjectName();
     generateReport(projectName)
-        .then(({ zipFileName }) => { }) // console.log
+        .then(({ zipFileName }) => { })
         .catch(err => { console.error(err.message); process.exit(1); });
 }

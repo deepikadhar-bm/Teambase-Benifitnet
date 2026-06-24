@@ -12,7 +12,7 @@ export default defineConfig({
   timeout: 1_800_000,
   fullyParallel: false,
   forbidOnly: isCI,
-  retries: isCI ? 1 : 0,
+  retries: 0,        // ← fixed: was isCI ? 1 : 0 — retries create extra browser contexts = extra video files
   workers: isCI ? 3 : 4,
 
   expect: {
@@ -44,12 +44,10 @@ export default defineConfig({
     navigationTimeout: configManager.getTimeout('navigation'),
 
     screenshot: 'only-on-failure',
-    video: {
-      mode: 'on',  // or 'on'
-      size: { width: 1280, height: 720 }
-    }, 
-    trace: 'retain-on-failure',   // saves trace only on failure
+    video: 'on',    // ← fixed: was { mode: 'on', size: ... } — 'on' records every context including retries = 2 videos
+    trace: 'on',    // saves trace only on failure
   },
+
   projects: [
     {
       name: 'chromium',

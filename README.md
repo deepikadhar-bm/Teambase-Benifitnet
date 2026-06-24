@@ -22,9 +22,10 @@
 12. [AutoHeal Engine](#12-autoheal-engine)
 13. [Error Handler and Retry Utils](#13-error-handler-and-retry-utils)
 14. [Runtime Store](#14-runtime-store)
-15. [Reports and Artifacts](#15-reports-and-artifacts)
-16. [Writing a New Test Case](#16-writing-a-new-test-case)
-17. [Coding Standards](#17-coding-standards)
+15. [Email Log Pagination](#15-email-log-pagination)
+16. [Reports and Artifacts](#16-reports-and-artifacts)
+17. [Writing a New Test Case](#17-writing-a-new-test-case)
+18. [Coding Standards](#18-coding-standards)
 
 ---
 
@@ -77,6 +78,8 @@ Teambase-Benifitnet/
 │   │
 │   ├── constant/
 │   │   └── app-constants.ts        ← Application string constants
+│   │                                 (includes INSURER_TO_EMAIL,
+│   │                                  ATTACHMENTMEMBERADDITION — added v2)
 │   │
 │   ├── pages/
 │   │   ├── basePage.ts             ← All interaction methods (60+ methods)
@@ -84,12 +87,15 @@ Teambase-Benifitnet/
 │   │       ├── login.ts            ← Login page locators
 │   │       ├── client.ts           ← Bulk import page locators
 │   │       ├── emailLog.ts         ← Email log page locators
+│   │       │                         (XPath predicates fixed: .// not //)
 │   │       └── reports.ts          ← Reports page locators
 │   │
 │   ├── modules-methods/            ← Business workflow action classes
 │   │   ├── loginPage.ts
-│   │   ├── clientPage.ts
-│   │   ├── emailPage.ts
+│   │   ├── clientPage.ts           ← downloadCensusSampleFile uses
+│   │   │                             FileUtils.getTcDownloadDir() (fixed v2)
+│   │   ├── emailPage.ts            ← paginateToMemberRow +
+│   │   │                             paginateToInsurerRow (added v2)
 │   │   └── reportPage.ts
 │   │
 │   ├── helpers/
@@ -106,6 +112,7 @@ Teambase-Benifitnet/
 │
 ├── test-data/
 │   ├── testDataManager.ts          ← Central data access class
+│   │                                 (LAST_NAME_MODE toggle added v2)
 │   └── json-files/
 │       ├── benefitnet_test_data.json  ← Column schema + member profiles
 │       └── loginTestData.json
@@ -113,10 +120,19 @@ Teambase-Benifitnet/
 ├── reports/
 │   ├── qa-reporter.js              ← Post-run reporter (ZIP + email)
 │   ├── generate-report.js          ← ZIP archive generator
+│   │                                 (MAX_ZIPS_TO_KEEP=5 added v2)
 │   └── send-email.js               ← Gmail SMTP email sender
 │
 ├── logs/                           ← IST-timestamped log files (auto-generated)
 ├── test-results/                   ← Screenshots, videos, traces, downloads
+│   └── downloads/
+│       └── REG_TS01_TC01/          ← All downloads scoped per TC (fixed v2)
+│           ├── ImportMembers_*.xlsx
+│           ├── ImportMembers_*_Updated.xlsx
+│           ├── MemberList_*.xlsx
+│           ├── MemberAdditionReport_*.xlsx
+│           ├── WorkflowLogsReport_*.xlsx
+│           └── ConsolidatedMembershipList_*.xlsx
 ├── playwright.config.ts            ← Playwright global configuration
 ├── package.json
 ├── tsconfig.json                   ← Path aliases (@pages, @utils, @fixtures)
@@ -129,7 +145,7 @@ Teambase-Benifitnet/
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/syslatech/Syslatech_Playwright.git
+git clone https://github.com/syslatech/teambase_benifitnet.git
 cd Teambase-Benifitnet
 
 # 2. Install Node dependencies
@@ -138,11 +154,14 @@ npm install
 # 3. Install Playwright browsers
 npx playwright install --with-deps
 
-# 4. Create .env from example
-cp .env
+# 4. Install reporting dependencies
+npm install archiver nodemailer dotenv
+
+# 5. Create .env from example
+cp .env.example .env
 # Edit .env and fill in email credentials if needed
 
-# 5. Verify framework health
+# 6. Verify framework health
 bash verify-framework.sh
 ```
 
@@ -263,6 +282,26 @@ for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
 }
 ```
 
+### `src/constant/app-constants.ts` — Application Constants
+
+All string constants and configuration values used across tests:
+
+```typescript
+export const APP_CONSTANTS = {
+  NUMBER_OF_MEMBERS:         3,
+  FALLBACK_HEADER_ROW_INDEX: 7,
+  HEADER_DETECTION_KEYWORDS: ['First Name', 'BenefitNet ID', 'Date Of Birth', '(*)'],
+  WRONG_PASSWORD:            'WrongPass',
+  USERNAME:                  'Syslatech_broker1',
+  EMPTY_USERNAME:            '',
+  EMPTY_PASSWORD:            '',
+  TESTINSURER:               'TestInsurer',
+  ATTACHMENTMEMBERLIST:      'MemberList',
+  ATTACHMENTMEMBERADDITION:  'MemberAdditionReport',  // ← added v2: insurer attachment
+  INSURER_TO_EMAIL:          'rrahim@yopmail.com',    // ← added v2: insurer recipient
+};
+```
+
 ### `src/config/fileConstants.ts` — File Paths
 
 ```typescript
@@ -273,6 +312,24 @@ FILE_PATHS.DOWNLOADS     // "test-results/downloads"
 FILE_PATHS.TRACES        // "test-results/traces"
 FILE_PATHS.VIDEOS        // "test-results/videos"
 ```
+
+### `playwright.config.ts` — Video and Retry Settings
+
+Two settings must be set together to avoid duplicate video files:
+
+```typescript
+export default defineConfig({
+  retries: 0,        // ← must be 0; retries: 1 creates 2 browser contexts = 2 videos
+
+  use: {
+    video: 'retain-on-failure',   // ← saves one video only when test fails
+    // WRONG: video: { mode: 'on', size: ... }
+    // 'on' records EVERY browser context including beforeEach setup = video-1.webm + video.webm
+  },
+});
+```
+
+**Why this matters:** With `retries: 1` + `mode: 'on'`, Playwright creates a browser context for the first attempt (`video-1.webm`) and another for the retry (`video.webm`). With `retries: 0` + `retain-on-failure`, only one video is ever produced and only when the test fails.
 
 ---
 
@@ -327,11 +384,32 @@ For locators that depend on runtime values, use methods instead of getters:
 // Target a specific member row by last name
 emailLogRowViewLinkByMemberLastName(lastName: string): Locator {
   return this.named(`Email Log Row View Link: ${lastName}`,
-    this.page.locator('tr')
-      .filter({ hasText: lastName })
-      .getByRole('link', { name: 'View' })
-      .first());
+    this.page.locator(`//tr[.//small[contains(text(),"${lastName}")]]//a[contains(normalize-space(.),"View")]`).first());
 }
+```
+
+### XPath Rules — Predicate Paths
+
+When writing XPath with predicates, always use `.//` (relative path) inside `[...]`, never `//` (absolute path):
+
+```typescript
+// CORRECT — .//span is relative to the current node context
+this.page.locator(`//tr[.//span[contains(text(),"Subject:")]]`)
+
+// WRONG — //span inside a predicate is invalid XPath, causes SyntaxError at runtime
+this.page.locator(`//tr[//span[contains(text(),"Subject:")]]`)
+```
+
+### String Quoting in XPath `contains()`
+
+Dynamic values inserted into XPath `contains()` must always be quoted:
+
+```typescript
+// CORRECT — email value is quoted in the XPath string
+this.page.locator(`//h5[contains(., "${insurerToEmail}")]`)
+
+// WRONG — unquoted value causes XPath SyntaxError at runtime
+this.page.locator(`//h5[contains(., ${insurerToEmail})]`)
 ```
 
 ### Adding a New Locator
@@ -427,7 +505,7 @@ await this.click(this.clientPageElements.GenericButton, { label: 'Import Type Dr
 Set input value directly (fast, no keyboard simulation). Best for text inputs, email fields, date fields.
 
 ```typescript
-await this.fill(this.loginElements.UserNameInput, 'syslatech_broker1');
+await this.fill(this.loginElements.UserNameInput, 'syslatech_1');
 
 // Log output:
 // [INFO ] Fill → Username Input | "syslatech_broker1"
@@ -1006,11 +1084,7 @@ Click a close button repeatedly until a target element becomes visible. Stops au
 
 ```typescript
 // Close panels one by one until the final status element is visible
-await this.closeUntilVisible(
-  this.elements.ClosePanel,
-  this.elements.ApprovedStatus,
-  5
-);
+await this.closeUntilVisible(this.elements.ClosePanel, this.elements.ApprovedStatus, 5);
 ```
 
 ---
@@ -1216,7 +1290,7 @@ export class ClientPage extends BasePage {
 |---|---|---|
 | `LoginPage` | `loginPage.ts` | Login, logout, verify dashboard |
 | `ClientPage` | `clientPage.ts` | Navigate to client, open bulk import, write Excel, upload census, capture validation errors, assert resolution, proceed to import |
-| `EmailLogPage` | `emailPage.ts` | Navigate to email logs, filter by client/policy, verify notification content, download attachment, verify attachment rows |
+| `EmailLogPage` | `emailPage.ts` | Navigate to email logs, filter by client/policy, paginate to member/insurer rows, verify notification content, download attachment, verify attachment rows |
 | `ReportPage` | `reportPage.ts` | Navigate to reports, export workflow logs Excel, export consolidated membership Excel, verify member rows |
 
 ### Using in a Spec
@@ -1233,6 +1307,92 @@ test.beforeEach(async ({ page }) => {
   emailLogPage = new EmailLogPage(page);
   reportPage   = new ReportPage(page);
 });
+```
+
+### `clientPage.ts` — Download Path Fix
+
+Both download methods use `FileUtils.getTcDownloadDir()` so all census files land inside the TC-scoped folder, not the root downloads folder:
+
+```typescript
+// downloadCensusSampleFile — now uses TC-scoped path
+async downloadCensusSampleFile(suffix?: string): Promise<string> {
+  const downloadDir = FileUtils.getTcDownloadDir();  // ← not this.DOWNLOAD_DIR
+  // ...saves to test-results/downloads/REG_TS01_TC01/ImportMembers_*.xlsx
+}
+
+// downloadValidationFailedCensusExcel — same fix
+async downloadValidationFailedCensusExcel(): Promise<string> {
+  const downloadDir = FileUtils.getTcDownloadDir();  // ← not this.DOWNLOAD_DIR
+  // ...saves to test-results/downloads/REG_TS01_TC02/AddMembersBulkValidationFailed_*.xlsx
+}
+```
+
+**Result — all files under the correct TC folder:**
+```
+test-results/downloads/
+├── REG_TS01_TC01/
+│   ├── ImportMembers_..._Round1.xlsx    ← was going to root level (bug)
+│   ├── ImportMembers_..._Updated.xlsx   ← was going to root level (bug)
+│   ├── MemberList_....xlsx
+│   ├── MemberAdditionReport_....xlsx
+│   ├── WorkflowLogsReport_....xlsx
+│   └── ConsolidatedMembershipList_....xlsx
+└── REG_TS01_TC02/
+    ├── ImportMembers_....xlsx           ← was going to root level (bug)
+    └── AddMembersBulkValidationFailed_....xlsx  ← was going to root level (bug)
+```
+
+### `emailPage.ts` — Dynamic Verification Methods
+
+#### `verifyAllMemberEmailLogRows()`
+
+Replaces the entire manual for-loop in STEP 7. Completely dynamic — works for 3, 25, 40 or any number of members. Paginates to each member automatically before asserting.
+
+```typescript
+// Spec STEP 7 — replaces the entire for-loop
+await emailLogPage.verifyAllMemberEmailLogRows(
+    runtimeMembers,           // Array<{ lastName, email, employeeNumber }>
+    capturedClientName,
+    capturedMedicalPolicyName,
+    policyCategory,
+    APP_CONSTANTS.TESTINSURER
+);
+```
+
+**Verifies 14 fields per member:**
+
+| Check | Field |
+|---|---|
+| Row level | Policy cell, Addition Request type, Notification Type, yopmail address, subject indicator, attachment count = 0 |
+| Detail view | Heading, Subject contains member name, Request submitted paragraph, Company name, Insurer name, Policy name, Policy category, Employee number |
+
+#### `downloadAndVerifyAllAttachmentExcelRows()`
+
+Replaces the download + for-loop in STEP 8. Downloads MemberList Excel once, verifies all N rows.
+
+```typescript
+// Spec STEP 8 — replaces download + for-loop
+await emailLogPage.downloadAndVerifyAllAttachmentExcelRows(
+    capturedClientName,
+    capturedMedicalPolicyName,
+    runtimeMembers  // Array<{ lastName, employeeNumber, email, nationalIdNumber, maritalStatus? }>
+);
+```
+
+**Verifies 9 fields per member:** Last Name, Employee No, Policy, Category, Relation, Marital Status, Nationality, National ID, Email
+
+#### `downloadAndVerifyMemberAdditionReportExcel()`
+
+Already dynamic — loops through all members via `FileUtils.verifyMemberAdditionReportExcel()`.
+
+```typescript
+// Spec STEP 9
+await emailLogPage.downloadAndVerifyMemberAdditionReportExcel(
+    capturedMedicalPolicyName,
+    APP_CONSTANTS.TESTINSURER,
+    'Member Addition',
+    runtimeMembers
+);
 ```
 
 ---
@@ -1284,27 +1444,57 @@ const resolved = tdm.resolvePlaceholders(profile.memberData, runtimeData, policy
 
 // Build Excel column map from resolved data
 const excelRow = tdm.buildExcelRow(resolved);
-// Returns: { 'First Name (*)': 'Sysla', 'Last Name (*)': 'Test49470', ... }
+// Returns: { 'First Name (*)': 'Sysla', 'Last Name (*)': 'Pallavi4729', ... }
 
 // Get profiles by round for dynamic multi-gender iteration
 const profileName = getProfileNameByGender('Male', 1, 'Partial');  // Round 1
 const profileName = getProfileNameByGender('Male', 2, 'Full');      // Round 2
 ```
 
-### Runtime Data Format
+### Last Name Mode — Indian Names or Test Names
 
-Every test run generates unique values:
+`testDataManager.ts` supports two last name formats controlled by a single constant at the top of the file:
+
+```typescript
+// test-data/testDataManager.ts
+
+type LastNameMode = 'indian' | 'test';
+const LAST_NAME_MODE: LastNameMode = 'indian';   // ← change this one line to switch modes
+```
+
+| Mode | Format | Example |
+|---|---|---|
+| `'indian'` | Indian surname + 4-digit suffix | `Pallavi4729`, `Patel8831`, `Iyer2045` |
+| `'test'` | `Test` prefix + 5-digit suffix | `Test49470`, `Test88356` |
+
+**To switch back to original test names:**
+```typescript
+const LAST_NAME_MODE: LastNameMode = 'test';
+```
+
+**To add more Indian surnames** — append to the pool array:
+```typescript
+const INDIAN_LAST_NAMES: string[] = [
+    'Shree', 'Priya', 'Kayal', 'Govind', 'Pallavi', ...
+    'Krishnan', 'Subramaniam',   // ← add here
+];
+```
+
+The 4-digit numeric suffix ensures uniqueness even when the same surname is picked twice in the same run.
+
+### Runtime Data Format
 
 | Field | Format | Example |
 |---|---|---|
-| `lastName` | `Test` + 5 random digits | `Test49470` |
+| `lastName` (indian mode) | Surname + 4 digits | `Pallavi4729` |
+| `lastName` (test mode) | `Test` + 5 digits | `Test49470` |
 | `employeeNumber` | `EMP` + 6 random digits | `EMP147933` |
 | `uidNumber` | 9 digits only | `638673242` |
 | `fileNumber` | 9 digits only | `292792097` |
 | `nationalIdNumber` | `NID` + 9 digits | `NID301433258` |
 | `passportNumber` | Letter + 7 digits | `V9495543` |
 | `phoneNumber` | UAE mobile format | `0538046018` |
-| `email` | `syslatech_NNN@yopmail.com` | `syslatech798121@yopmail.com` |
+| `email` | `syslatechNNN@yopmail.com` | `syslatech79811@yopmail.com` |
 | `dateOfBirth` | `DD/MM/YYYY` | `02/08/1975` |
 | `additionDate` | Current date IST | `22/06/2026` |
 
@@ -1380,16 +1570,16 @@ log.debug('LoadState reached in 145ms');
 
 ```typescript
 // Named data value
-log.data('Member 1', 'Sysla Test49470 | EmpNo: EMP147933');
+log.data('Member 1', 'Sysla Pallavi4729 | EmpNo: EMP147933');
 log.data('Loan Amount', '$300,000');
-log.data('Runtime Data', { firstName: 'Sysla', lastName: 'Test49470' });
+log.data('Runtime Data', { firstName: 'Sysla', lastName: 'Pallavi4729' });
 
 // File operation
 log.file('Downloaded: ImportMembers_22-6-2026.xlsx (130 KB)');
 log.file('Saved to: C:\\path\\downloads\\MemberList.xlsx');
 
 // Validation — expected vs actual with verdict
-log.validate('Last Name',    'Test49470', 'Test49470', true);    // PASS
+log.validate('Last Name',    'Pallavi4729', 'Pallavi4729', true);    // PASS
 log.validate('Marital Status', 'Married', 'Single',   false);   // FAIL
 log.validate('Employee No', 'EMP147933', 'EMP147933');           // no verdict
 
@@ -1412,16 +1602,16 @@ for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
 }
 
 // Log output:
-// [SECTION ] ┌─ Verifying Member 1 — Test49470 ─────────────────────
-// [VALIDATE] Last Name | Expected: "Test49470" | Actual: "Test49470" | ✔ PASS
-// [SECTION ] └─ Verifying Member 1 — Test49470 — done
+// [SECTION ] ┌─ Verifying Member 1 — Pallavi4729 ─────────────────────
+// [VALIDATE] Last Name | Expected: "Pallavi4729" | Actual: "Pallavi4729" | ✔ PASS
+// [SECTION ] └─ Verifying Member 1 — Pallavi4729 — done
 ```
 
 ### Table Logging
 
 ```typescript
 log.table([
-  { Field: 'Last Name',   Expected: 'Test49470', Actual: 'Test49470', Result: 'PASS' },
+  { Field: 'Last Name',   Expected: 'Pallavi4729', Actual: 'Pallavi4729', Result: 'PASS' },
   { Field: 'Employee No', Expected: 'EMP147933', Actual: 'EMP147933', Result: 'PASS' },
   { Field: 'Marital',     Expected: 'Married',   Actual: 'Single',    Result: 'FAIL' },
 ]);
@@ -1484,22 +1674,10 @@ Capture Excel state between import rounds and automatically diff changes.
 
 ```typescript
 // Capture snapshot with label
-await FileUtils.captureExcelStep(
-  filePath,
-  'Incomplete Census — mandatory field validation trigger',
-  'REG_TS01_TC01'
-);
+await FileUtils.captureExcelStep(filePath,'Incomplete Census — mandatory field validation trigger','REG_TS01_TC01');
 
 // Second call compares against first
-await FileUtils.captureExcelStep(
-  updatedFilePath,
-  'Complete Census — all mandatory fields resolved',
-  'REG_TS01_TC01'
-);
-
-// Snapshot files saved to:
-// test-results/downloads/REG_TS01_TC01/steps/01_ImportMembers_....xlsx
-// test-results/downloads/REG_TS01_TC01/steps/02_ImportMembers_....xlsx
+await FileUtils.captureExcelStep(updatedFilePath,'Complete Census — all mandatory fields resolved','REG_TS01_TC01');
 
 // How it works:
 // - Uses XlsxPopulate to count actual populated rows (not total allocated rows)
@@ -1512,7 +1690,7 @@ await FileUtils.captureExcelStep(
 ```typescript
 // Read all rows from an Excel file as array of objects
 const rows = await FileUtils.readExcel(filePath, 'Sheet1');
-// Returns: [{ 'First Name (*)': 'Sysla', 'Last Name (*)': 'Test49470', ... }, ...]
+// Returns: [{ 'First Name (*)': 'Sysla', 'Last Name (*)': 'Pallavi4729', ... }, ...]
 
 // Find a specific row by Employee Number
 const memberRow = rows.find(r => r['Employee Number'] === 'EMP147933');
@@ -1634,7 +1812,48 @@ Runtime.clear();
 
 ---
 
-## 15. Reports and Artifacts
+## 15. Email Log Pagination
+
+The email log can contain 700–1000+ items spread across 70+ pages. Two private methods in `emailPage.ts` handle pagination automatically — every public assertion method calls the appropriate paginator as its first action.
+
+### `paginateToMemberRow(memberLastName)`
+
+Scans the email log table page by page until a row containing the member's last name is found. On each page it reads every `<small>` element text and checks for the last name. After clicking Next Page it waits for the first row text to change before checking the new page, ensuring the DOM has fully loaded. Supports up to 100 pages.
+
+```
+[INFO ] "Pallavi4729" not on email log page 1 — navigating to next page
+[INFO ] "Pallavi4729" not on email log page 2 — navigating to next page
+[INFO ] "Pallavi4729" found on page 3 (row 4)
+```
+
+### `paginateToInsurerRow()`
+
+Scans page by page until a row containing `"Member Addition Bulk Request"` is found — this covers both the HR email row (`To: Syslatechhhr1@yopmail.com`) and the insurer email row (`To: rrahim@yopmail.com`) which share the same subject text. Same DOM-stabilization logic. Supports up to 100 pages.
+
+```
+[INFO ] Insurer bulk request row not on email log page 1 — navigating to next page
+[INFO ] Insurer bulk request row found on page 2
+```
+
+### Methods That Use Pagination
+
+| Method | Paginator used |
+|---|---|
+| `openMemberEmailLogDetail(lastName)` | `paginateToMemberRow` |
+| `assertEmailLogRowExistsForMember(policy, lastName)` | `paginateToMemberRow` |
+| `assertEmailLogRowExistsForLastNameWithAdditionRequest(lastName)` | `paginateToMemberRow` |
+| `assertEmailLogRowExistsForLastNameWithNotificationType(lastName)` | `paginateToMemberRow` |
+| `assertEmailLogRowExistsForToYopEmail(lastName, email)` | `paginateToMemberRow` |
+| `assertEmailLogRowExistsForToYopEmailHaveAttachments(lastName)` | `paginateToMemberRow` |
+| `assertEmailLogRowExistsForToYopEmailHaveAttachmentsZero(lastName)` | `paginateToMemberRow` |
+| `verifyAllMemberEmailLogRows(...)` (inner loop) | `paginateToMemberRow` |
+| `openInsurerBulkRequestEmailDetail()` | `paginateToInsurerRow` |
+| `assertInsurerEmailTo(client, emailTo)` | `paginateToInsurerRow` |
+| `assertInsurerEmailToViewButton(client, emailTo)` | `paginateToInsurerRow` |
+
+---
+
+## 16. Reports and Artifacts
 
 ### Generated After Every Run
 
@@ -1646,12 +1865,31 @@ Runtime.clear();
 | `test-results/screenshots/` | Failure PNGs | Open directly |
 | `test-results/downloads/REG_TS01_TC01/` | Downloaded Excel files | Open in Excel |
 | `test-results/downloads/REG_TS01_TC01/steps/` | Census snapshots per round | Open in Excel |
-| `reports/html-reports-zip/` | ZIP of full run | Extract → open `playwright-report/index.html` |
+| `reports/html-reports-zip/` | ZIP of full run (last 5 kept) | Extract → open `playwright-report/index.html` |
+
+### ZIP Retention Policy
+
+`generate-report.js` automatically keeps only the **last 5 ZIP files** per project. After every new ZIP is created, older ones beyond the limit are deleted.
+
+```javascript
+// reports/generate-report.js
+const MAX_ZIPS_TO_KEEP = 5;   // ← change this number to keep more or fewer
+```
+
+**Example folder after 7 runs — only 5 ZIPs remain:**
+```
+html-reports-zip/
+├── teambase-benifitnet-2026-06-24_11-29-00.zip  ← newest (kept)
+├── teambase-benifitnet-2026-06-24_09-15-22.zip  ← kept
+├── teambase-benifitnet-2026-06-23_22-30-11.zip  ← kept
+├── teambase-benifitnet-2026-06-23_18-45-03.zip  ← kept
+└── teambase-benifitnet-2026-06-23_14-20-55.zip  ← kept (5th)
+                                                  ← 6th and 7th deleted automatically
+```
 
 ### Sending the Report by Email
 
 ```bash
-
 # Install these 3 dependencies
 npm install archiver nodemailer dotenv
 
@@ -1672,7 +1910,7 @@ The trace shows every browser action with before/after screenshots, network call
 
 ---
 
-## 16. Writing a New Test Case
+## 17. Writing a New Test Case
 
 ### Step 1 — Create the spec file
 
@@ -1713,11 +1951,10 @@ test.describe('Your Suite Name', () => {
 
       log.step('STEP 1: Login to application');
       try {
-        await loginPage.loginToBenefitNetApplication(
-          qaConfig.baseURL,
-          qaConfig.credentials.username,
-          qaConfig.credentials.password
-        );
+        log.info(`Opening BenefitNet portal — ${qaConfig.baseURL}`);
+        log.info(`Entering broker credentials for account: ${qaConfig.credentials.username}`);
+        log.info('Submitting login form and waiting for dashboard to load');
+        await loginPage.loginToBenefitNetApplication(qaConfig.baseURL,qaConfig.credentials.username,qaConfig.credentials.password);
         log.stepPass('STEP 1: Login successful');
       } catch (e) {
         await log.stepFail(page, 'STEP 1: Login failed');
@@ -1765,7 +2002,7 @@ npx playwright test tests/e2e/reg_ts01_tc03 --headed
 
 ---
 
-## 17. Coding Standards
+## 18. Coding Standards
 
 ### `log.step()` is ONLY for spec files
 
@@ -1777,6 +2014,23 @@ log.step('STEP 1: Login to application');
 log.step(`Click → ${name}`);   // use log.info() instead
 ```
 
+### Add `log.info()` before every method call in specs
+
+Every `await someModule.someMethod(...)` in a spec file must have a descriptive `log.info()` before it. This makes the terminal output self-documenting for anyone reading it without opening source files.
+
+```typescript
+// CORRECT
+log.info(`Opening BenefitNet portal — ${qaConfig.baseURL}`);
+await loginPage.loginToBenefitNetApplication(qaConfig.baseURL, username, password);
+
+log.info(`Verifying email type shows "Addition Request" for member: ${member.lastName}`);
+await emailLogPage.assertEmailLogRowExistsForLastNameWithAdditionRequest(member.lastName);
+
+// WRONG — no context for the reader
+await loginPage.loginToBenefitNetApplication(qaConfig.baseURL, username, password);
+await emailLogPage.assertEmailLogRowExistsForLastNameWithAdditionRequest(member.lastName);
+```
+
 ### Always use `named()` for locators
 
 ```typescript
@@ -1785,6 +2039,28 @@ return this.named('Login Button', this.page.locator('#loginBtn'));
 
 // WRONG
 return this.page.locator('#loginBtn');
+```
+
+### XPath predicates — always `.//` not `//`
+
+Inside an XPath predicate `[...]`, the path to a child element must always start with `.//` (relative to the current node) not `//` (which is absolute and invalid inside a predicate):
+
+```typescript
+// CORRECT — .// is relative to the <tr> being tested
+this.page.locator(`//tr[.//small[contains(text(),"${lastName}")]]`)
+
+// WRONG — causes XPath SyntaxError at runtime
+this.page.locator(`//tr[//small[contains(text(),"${lastName}")]]`)
+```
+
+### Dynamic values in XPath `contains()` must be quoted
+
+```typescript
+// CORRECT — the email string is quoted inside contains()
+this.page.locator(`//h5[contains(., "${insurerToEmail}")]`)
+
+// WRONG — causes XPath SyntaxError at runtime
+this.page.locator(`//h5[contains(., ${insurerToEmail})]`)
 ```
 
 ### Never hardcode member count
@@ -1806,11 +2082,11 @@ try {
   uiErrors = await clientPage.getValidationErrorsPerMember();
 } catch (e) { ... }
 
-// WRONG
+// WRONG — var leaks but is undefined if try failed
 try {
   var uiErrors = await clientPage.getValidationErrorsPerMember();
 } catch (e) { ... }
-// using uiErrors here — var leaks but is undefined if try failed
+// using uiErrors here — undefined if the try block threw
 ```
 
 ### Optional chaining on all external data access
@@ -1840,6 +2116,7 @@ FileUtils.clearExcelStepHistory('REG_TS01_TC01');
 // CORRECT
 log.step('STEP 2: Navigate to client policy');
 try {
+  log.info('Clicking Clients in the sidebar to open the client list');
   await clientPage.navigateToClientsViasidebar();
   log.stepPass('STEP 2: Navigation successful');
 } catch (e) {
