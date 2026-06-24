@@ -8,6 +8,6 @@ export const APP_CONSTANTS = {
   ATTACHMENTMEMBERADDITION: "MemberAdditionReport",
   FALLBACK_HEADER_ROW_INDEX: 7,
   HEADER_DETECTION_KEYWORDS: ['First Name', 'BenefitNet ID', 'Date Of Birth', '(*)'],
-  NUMBER_OF_MEMBERS: 3,
+  NUMBER_OF_MEMBERS: 5,
   INSURER_TO_EMAIL: "rrahim@yopmail.com",
 };

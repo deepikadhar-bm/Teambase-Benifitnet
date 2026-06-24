@@ -255,50 +255,8 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                 log.info(`Filtering email log by Client: ${capturedClientName} | Policy: ${capturedMedicalPolicyName}`);
                 await emailLogPage.filterEmailLogsByClientAndPolicy();
 
-                for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
-                    const member = runtimeMembers[i];
-
-                    log.info(`--- Verifying Member ${i + 1} notification email: ${member.lastName} ---`);
-                    log.info(`Verifying email log row exists for member: ${member.lastName} under policy: ${capturedMedicalPolicyName}`);
-                    await emailLogPage.assertEmailLogRowExistsForMember(capturedClientName, capturedMedicalPolicyName);
-                    log.info(`Verifying email type shows "Addition Request" for member: ${member.lastName}`);
-                    await emailLogPage.assertEmailLogRowExistsForLastNameWithAdditionRequest(member.lastName);
-                    log.info(`Verifying notification type is correct for member: ${member.lastName}`);
-                    await emailLogPage.assertEmailLogRowExistsForLastNameWithNotificationType(member.lastName);
-                    log.info(`Verifying email was sent to correct yopmail address: ${member.email}`);
-                    await emailLogPage.assertEmailLogRowExistsForToYopEmail(member.lastName, member.email);
-                    log.info(`Verifying email attachment indicator for member: ${member.lastName}`);
-                    await emailLogPage.assertEmailLogRowExistsForToYopEmailHaveAttachments(member.lastName);
-                    log.info('Verifying member notification email has 0 attachments (attachment is on the insurer email, not this one)');
-                    await emailLogPage.assertEmailLogRowExistsForToYopEmailHaveAttachmentsZero(member.lastName);
-                    log.info(`Opening email detail view for member: ${member.lastName}`);
-                    await emailLogPage.openMemberEmailLogDetail(member.lastName);
-                    log.info('Verifying email detail heading is visible — confirms correct email was opened');
-                    await emailLogPage.assertEmailDetailHeadingIsVisible();
-                    log.info(`Verifying email subject line contains the member name: ${member.lastName}`);
-                    await emailLogPage.assertEmailDetailSubjectContainsMemberName(member.lastName);
-                    log.info('Verifying email body contains "Request submitted to insurer" paragraph');
-                    await emailLogPage.assertEmailDetailRequestSubmittedToInsurer();
-                    log.info(`Verifying company name in email detail: expected "${capturedClientName}"`);
-                    await emailLogPage.assertEmailDetailCompanyName(capturedClientName);
-                    log.info(`Verifying insurer name in email detail: expected "${APP_CONSTANTS.TESTINSURER}"`);
-                    await emailLogPage.assertEmailDetailInsurer(APP_CONSTANTS.TESTINSURER);
-                    log.info(`Verifying policy name in email detail: expected "${capturedMedicalPolicyName}"`);
-                    await emailLogPage.assertEmailDetailPolicyName(capturedMedicalPolicyName);
-                    log.info(`Verifying policy category in email detail: expected "${policyCategory}"`);
-                    await emailLogPage.assertEmailDetailPolicyCategory(policyCategory);
-                    log.info(`Verifying employee number in email detail: expected "${member.employeeNumber}"`);
-                    await emailLogPage.assertEmailDetailEmployeeNumber(member.employeeNumber);
-
-                    log.stepPass(`Member ${i + 1} notification email content verified`);
-
-                    if (i < NUMBER_OF_MEMBERS - 1) {
-                        log.info('Returning to email log list to verify next member');
-                        await emailLogPage.clickBackToList();
-                        log.info('Re-filtering email logs for next member verification');
-                        await emailLogPage.filterEmailLogsByClientAndPolicy();
-                    }
-                }
+                log.info(`Verifying all ${NUMBER_OF_MEMBERS} member notification emails — 14 fields each`);
+                await emailLogPage.verifyAllMemberEmailLogRows(runtimeMembers, capturedClientName, capturedMedicalPolicyName, policyCategory, APP_CONSTANTS.TESTINSURER);
 
                 log.stepPass(`STEP 7: Notification emails verified for all ${NUMBER_OF_MEMBERS} members`);
             } catch (e) {
@@ -325,19 +283,8 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                 log.info(`Verifying attachment file name contains "${APP_CONSTANTS.ATTACHMENTMEMBERLIST}" — confirms MemberList Excel is attached`);
                 await emailLogPage.assertAttachmentFileNameContains(APP_CONSTANTS.ATTACHMENTMEMBERLIST);
 
-                log.info(`Downloading MemberList attachment Excel — will verify all ${NUMBER_OF_MEMBERS} member rows from this single file`);
-                const attachmentFilePath = await emailLogPage.downloadAttachmentExcel(
-                    capturedClientName,
-                    capturedMedicalPolicyName
-                );
-
-                for (let i = 0; i < NUMBER_OF_MEMBERS; i++) {
-                    const member = runtimeMembers[i];
-                    log.info(`--- Verifying Member ${i + 1} in member list attachment Excel: ${member.lastName} ---`);
-                    log.info(`Verifying Member ${i + 1} (${member.lastName}) in MemberList attachment Excel — checking 9 fields: Last Name, Employee No, Policy, Category, Relation, Marital Status, Nationality, National ID, Email`);
-                    await emailLogPage.verifyAttachmentExcelRow(attachmentFilePath, i, capturedClientName, capturedMedicalPolicyName, member);
-                    log.stepPass(`Member ${i + 1} attachment Excel row verified`);
-                }
+                log.info(`Downloading and verifying MemberList attachment Excel for all ${NUMBER_OF_MEMBERS} members — 9 fields each`);
+                await emailLogPage.downloadAndVerifyAllAttachmentExcelRows(capturedClientName, capturedMedicalPolicyName, runtimeMembers);
 
                 log.stepPass('STEP 8: HR Insurer bulk request email and member list attachment Excel verified');
             } catch (e) {
@@ -369,7 +316,7 @@ test.describe('Add Members Bulk — Full End-to-End Workflow', () => {
                 await emailLogPage.assertAttachmentFileNameContains(APP_CONSTANTS.ATTACHMENTMEMBERADDITION);
 
                 log.info(`Downloading Member Addition Report Excel and verifying all ${NUMBER_OF_MEMBERS} members — Beneficiary Last Name, Staff No, Policy Name, TPA Name, Endorsement Type`);
-                await emailLogPage.downloadAndVerifyMemberAdditionReportExcel(capturedMedicalPolicyName,APP_CONSTANTS.TESTINSURER,'Member Addition',runtimeMembers);
+                await emailLogPage.downloadAndVerifyMemberAdditionReportExcel(capturedMedicalPolicyName, APP_CONSTANTS.TESTINSURER, 'Member Addition', runtimeMembers);
 
                 log.stepPass('STEP 9: Insurer bulk request email, member list attachment Excel and Member Addition Report verified');
             } catch (e) {

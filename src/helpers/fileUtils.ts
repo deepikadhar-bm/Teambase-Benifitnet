@@ -1252,7 +1252,7 @@ export class FileUtils {
   //   FileUtils.clearTestContext();
   // ==========================================================================
   static clearTestContext(): void {
-    logger.info(`FileUtils: test context cleared (was "${FileUtils.currentTcId}")`);
+    logger.info(`[Teardown] TC download context released — was: "${FileUtils.currentTcId}"`);
     FileUtils.currentTcId = '';
   }
 
@@ -1282,7 +1282,8 @@ export class FileUtils {
 
     // ── 1. Build steps folder ────────────────────────────────────────────────
     const stepsDir = path.join(
-      process.cwd(), "test-results", "downloads", tcId, "steps"
+      process.cwd(), "test-results", "downloads", tcId
+      // process.cwd(), "test-results", "downloads", tcId, "census-snapshots"
     );
     if (!fs.existsSync(stepsDir)) fs.mkdirSync(stepsDir, { recursive: true });
 
@@ -1294,11 +1295,11 @@ export class FileUtils {
     //   Original: ImportMembers_19-6-2026--15-26-36.xlsx
     //   Saved as: 01_ImportMembers_19-6-2026--15-26-36.xlsx
     //   stepLabel is used ONLY in the console diff log — not in the file name
-    const originalFileName = path.basename(filePath);
-    const copyName = `${String(count).padStart(2, '0')}_${originalFileName}`;
-    const copyPath = path.join(stepsDir, copyName);
-    fs.copyFileSync(filePath, copyPath);
-    logger.info(`[ExcelStep ${count}] "${stepLabel}" → saved: ${copyName}`);
+    // const originalFileName = path.basename(filePath);
+    // const copyName = `${String(count).padStart(2, '0')}_${originalFileName}`;
+    // const copyPath = path.join(stepsDir, copyName);
+    // fs.copyFileSync(filePath, copyPath);
+    // logger.info(`[ExcelStep ${count}] "${stepLabel}" → saved: ${copyName}`);
 
     // ── 4. Read current rows (dynamic — uses XlsxPopulate to read only actual data rows) ──
     let currentRows: Array<Record<string, unknown>> = [];
@@ -1435,7 +1436,7 @@ export class FileUtils {
   static clearExcelStepHistory(tcId: string): void {
     FileUtils.stepHistory.delete(tcId);
     FileUtils.stepCounter.delete(tcId);
-    logger.info(`FileUtils: step history cleared for "${tcId}"`);
+    logger.info(`[Teardown] Excel step snapshots cleared — TC: "${tcId}"`);
   }
 
   // ==========================================================================

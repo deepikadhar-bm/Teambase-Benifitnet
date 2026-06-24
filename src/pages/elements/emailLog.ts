@@ -53,9 +53,14 @@ export class EmailLogElements {
             this.page.getByText('Notification Type:'));
     }
 
+    // emailLogRowViewLinkByMemberLastName(lastName: string): Locator {
+    //     return this.named(`Email Log Row View Link: ${lastName}`,
+    //         this.page.locator('tr').filter({ hasText: lastName }).getByRole('link', { name: 'View' }).first());
+    // }
+
     emailLogRowViewLinkByMemberLastName(lastName: string): Locator {
         return this.named(`Email Log Row View Link: ${lastName}`,
-            this.page.locator('tr').filter({ hasText: lastName }).getByRole('link', { name: 'View' }).first());
+            this.page.locator(`//tr[.//small[contains(text(),"${lastName}")]]//a[contains(normalize-space(.),"View")]`).first());
     }
 
     emailLogRowByLastNameWithAdditionRequest(lastName: string): Locator {
@@ -85,12 +90,12 @@ export class EmailLogElements {
 
     emailLogClientNameCellByMemberLastName(memberLastName: string, clientName: string): Locator {
         return this.named(`Email Log Client Cell: ${memberLastName}`,
-            this.page.locator(`//tr//small[contains(text(),"${memberLastName}")]/../..//td[3]//small[contains(text(),"Wrong")]/../..//td[4]//small//span[text()="Client: "]/..//a[contains(text(),"${clientName}")]`));
+            this.page.locator(`//tr//small[contains(text(),"${memberLastName}")]/../..//td[3]//small[contains(text(),"Add Members Bulk")]/../..//td[4]//small//span[text()="Client: "]/..//a[contains(text(),"${clientName}")]`));
     }
 
     emailLogPolicyCellByMemberLastName(memberLastName: string, policyName: string): Locator {
         return this.named(`Email Log Policy Cell: ${memberLastName}`,
-            this.page.locator(`//tr//td[@colspan="2"]//small[contains(text(),"${memberLastName}")]/../..//td[3]//small[contains(text(),"Wrong")]/../..//td[4]//small//span[text()="Policy: "]/..//a[contains(text(),"${policyName}")]`));
+            this.page.locator(`//tr//td[@colspan="2"]//small[contains(text(),"${memberLastName}")]/../..//td[3]//small[contains(text(),"Add Members Bulk")]/../..//td[4]//small//span[text()="Policy: "]/..//a[contains(text(),"${policyName}")]`));
     }
 
     get addMembersBulkEmailDetailHeading(): Locator {

@@ -6,6 +6,7 @@ import { ClientElements } from '@pages/elements/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger as log } from 'src/helpers/logger';
+import { FileUtils } from 'src/helpers/fileUtils';
 
 const XlsxPopulate = require('xlsx-populate').default || require('xlsx-populate');
 
@@ -75,7 +76,7 @@ export class ClientPage extends BasePage {
     }
 
     async downloadCensusSampleFile(suffix?: string): Promise<string> {
-        if (!fs.existsSync(this.DOWNLOAD_DIR)) fs.mkdirSync(this.DOWNLOAD_DIR, { recursive: true });
+        const downloadDir = FileUtils.getTcDownloadDir();
 
         await this.waitForElementIsVisible(this.clientPageElements.downloadSampleFileLink);
         const downloadEventPromise = this.page.waitForEvent('download');
@@ -85,7 +86,7 @@ export class ClientPage extends BasePage {
         const baseFileName = downloadedFile.suggestedFilename().replace('.xlsx', '');
         const suffixPart = suffix ? `_${suffix}` : '';
         const uniqueFileName = `${baseFileName}_${this.istFileTimestamp()}${suffixPart}.xlsx`;
-        const savedFilePath = path.join(this.DOWNLOAD_DIR, uniqueFileName);
+        const savedFilePath = path.join(downloadDir, uniqueFileName);
 
         await downloadedFile.saveAs(savedFilePath);
         await this.waitUntilFileIsReady(savedFilePath);
@@ -96,7 +97,7 @@ export class ClientPage extends BasePage {
     }
 
     async downloadValidationFailedCensusExcel(): Promise<string> {
-        if (!fs.existsSync(this.DOWNLOAD_DIR)) fs.mkdirSync(this.DOWNLOAD_DIR, { recursive: true });
+        const downloadDir = FileUtils.getTcDownloadDir();
 
         const exportLink = this.clientPageElements.exportCensusWithValidationErrorCommentsLink;
         await this.waitForElementIsVisible(exportLink);
@@ -107,7 +108,7 @@ export class ClientPage extends BasePage {
 
         const baseName = downloadedFile.suggestedFilename().replace('.xlsx', '');
         const uniqueFileName = `${baseName}_${this.istFileTimestamp()}.xlsx`;
-        const savedFilePath = path.join(this.DOWNLOAD_DIR, uniqueFileName);
+        const savedFilePath = path.join(downloadDir, uniqueFileName);
 
         await downloadedFile.saveAs(savedFilePath);
         await this.waitUntilFileIsReady(savedFilePath);
@@ -144,6 +145,7 @@ export class ClientPage extends BasePage {
     async clickValidateImportButton(): Promise<void> {
         await this.click(this.clientPageElements.validateImportButton);
         if (await this.assertElementVisible(this.clientPageElements.importProgressBarModal)) {
+            await this.page.waitForTimeout(3000);
             await this.waitForElementToDisappear(this.clientPageElements.importProgressBarModal);
         }
     }

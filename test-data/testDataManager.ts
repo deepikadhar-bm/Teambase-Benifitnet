@@ -31,6 +31,50 @@ export interface BenefitNetTemplate {
     defaultFieldValues: Record<string, string>;
 }
 
+// ── Last Name Mode ────────────────────────────────────────────────────────────
+//
+// Controls what last name format is used when generating runtime member data.
+//
+// 'indian'  → picks a random Indian surname from INDIAN_LAST_NAMES + 4-digit suffix
+//             e.g. "Sharma4729", "Patel8831", "Iyer2045"
+//
+// 'test'    → uses the original "Test" prefix + 5-digit suffix
+//             e.g. "Test49470", "Test88356"
+//
+// To switch between modes, change this one line:
+//   const LAST_NAME_MODE: LastNameMode = 'indian';   ← real Indian names
+//   const LAST_NAME_MODE: LastNameMode = 'test';     ← original test names
+//
+type LastNameMode = 'indian' | 'test';
+const LAST_NAME_MODE: LastNameMode = 'indian';
+
+// ── Indian surnames pool ──────────────────────────────────────────────────────
+// Add or remove names here to expand or shrink the pool.
+// Suffix digits ensure uniqueness across runs even when the same name is picked.
+const INDIAN_LAST_NAMES: string[] = [
+    'Nikkil', 'Gopi', 'Sweetha', 'Kumar', 'Govind',
+    'Meenu', 'Ashwanth', 'Vamsi', 'Iyer', 'Divya',
+    'Sai', 'Raj', 'Pallavi', 'Menon', 'Vel',
+    'Bhoomika', 'Gautham', 'Dhunesh', 'Dhunil', 'Kayal',
+    'Sudharshan', 'Priya', 'Bhavya', 'Mukesh', 'Deva',
+    'Teja', 'Hegde', 'Pooja', 'Jothika', 'Maheen',
+    'Ishu', 'Amar', 'Chaithanya', 'Shree', 'Krish',
+    'Shiva', 'Harish', 'Adhi', 'Dubey', 'Charlie',
+];
+
+function generateLastName(): string {
+    if (LAST_NAME_MODE === 'indian') {
+        const name = INDIAN_LAST_NAMES[Math.floor(Math.random() * INDIAN_LAST_NAMES.length)];
+        const suffix = Math.floor(Math.random() * 9000) + 1000;   // 4-digit suffix
+        return `${name}${suffix}`;
+    }
+    // 'test' mode — original behaviour
+    const digits = Math.floor(Math.random() * 90000) + 10000;     // 5-digit suffix
+    return `Test${digits}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface NameEntry {
     lastName: string;
     gender: 'Male' | 'Female';
@@ -53,19 +97,16 @@ function generateUniqueEmployeeNumber(): string {
 }
 
 function generateUniqueUidNumber(): string {
-    // BenefitNet constraint: minimum 4 digits, number digits only — no letters or symbols
     const digits = Math.floor(Math.random() * 900_000_000) + 100_000_000;
     return String(digits);
 }
 
 function generateUniqueFileNumber(): string {
-    // BenefitNet likely shares same digits-only constraint as UID Number
     const digits = Math.floor(Math.random() * 900_000_000) + 100_000_000;
     return String(digits);
 }
 
 function generateUniquePassportNumber(): string {
-    // Standard UAE passport format: 1 letter + 7 digits e.g. A1234567
     const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
     const prefix = letters[Math.floor(Math.random() * letters.length)];
     const digits = Math.floor(Math.random() * 9_000_000) + 1_000_000;
@@ -73,22 +114,18 @@ function generateUniquePassportNumber(): string {
 }
 
 function generateUniquePhoneNumber(): string {
-    // UAE mobile format: 05XXXXXXXX (10 digits, no + prefix)
     const digits = Math.floor(Math.random() * 90_000_000) + 10_000_000;
     return `05${digits}`;
 }
 
 function generateUniqueEstablishmentId(): string {
-    // Digits only — no prefix in case BenefitNet enforces same numeric-only rule
     const digits = Math.floor(Math.random() * 900_000) + 100_000;
     return String(digits);
 }
 
 function generateEmail(_firstName: string, _lastName: string): string {
-    const digits = Math.floor(Math.random() * 900_000) + 100_000;
+    const digits = Math.floor(Math.random() * 90_000) + 10_000;
     return `syslatech${digits}@yopmail.com`;
-    // const timestamp = Date.now().toString().slice(-4);
-    // return `syslatech${digits}${timestamp}@yopmail.com`;
 }
 
 function getCurrentIndianDate(): string {
@@ -227,16 +264,14 @@ class TestDataManagerClass {
     getDefaultValue(fieldKey: string): string | undefined { return this.template.defaultFieldValues[fieldKey]; }
 
     generateRuntimeData(): RuntimeData {
-        const digits = Math.floor(Math.random() * 90000) + 10000;
-        const lastName = `Test${digits}`;
+        const lastName = generateLastName();
         const gender = Math.random() < 0.5 ? 'Female' : 'Male' as 'Male' | 'Female';
         const firstName = 'Sysla';
         return this.buildRuntimeData(firstName, lastName, gender);
     }
 
     generateRuntimeDataForGender(gender: 'Male' | 'Female'): RuntimeData {
-        const digits = Math.floor(Math.random() * 90000) + 10000;
-        const lastName = `Test${digits}`;
+        const lastName = generateLastName();
         const firstName = 'Sysla';
         return this.buildRuntimeData(firstName, lastName, gender);
     }
@@ -259,43 +294,6 @@ class TestDataManagerClass {
             timestamp: currentTimestamp(),
         };
     }
-    //Not Required
-    // resolvePlaceholders(
-    //     profileData:    Record<string, string>,
-    //     runtimeData:    RuntimeData,
-    //     policyCategory: string = ''
-    // ): Record<string, string> {
-    //     const resolved: Record<string, string> = {};
-
-    //     const replacements: Record<string, string> = {
-    //         '__DYNAMIC__firstName':         runtimeData.firstName,
-    //         '__DYNAMIC__lastName':          runtimeData.lastName,
-    //         '__DYNAMIC__gender':            runtimeData.gender,
-    //         '__DYNAMIC__email':             runtimeData.email,
-    //         '__DYNAMIC__dob':               runtimeData.dob,
-    //         '__DYNAMIC__additionDate':      runtimeData.additionDate,
-    //         '__DYNAMIC__employeeNumber':    runtimeData.employeeNumber,
-    //         '__DYNAMIC__nationalIdNumber':  runtimeData.nationalIdNumber,
-    //         '__DYNAMIC__uidNumber':         runtimeData.uidNumber,
-    //         '__DYNAMIC__fileNumber':        runtimeData.fileNumber,
-    //         '__DYNAMIC__passportNumber':    runtimeData.passportNumber,
-    //         '__DYNAMIC__phoneNumber':       runtimeData.phoneNumber,
-    //         '__DYNAMIC__establishmentId':   runtimeData.establishmentId,
-    //         '__POLICY_CATEGORY__':          policyCategory,
-    //     };
-
-    //     for (const [key, value] of Object.entries(profileData)) {
-    //         if (replacements[value] !== undefined) {
-    //             resolved[key] = replacements[value];
-    //         } else if (value.startsWith('__DYNAMIC__')) {
-    //             resolved[key] = replacements[value] ?? value;
-    //         } else {
-    //             resolved[key] = value;
-    //         }
-    //     }
-
-    //     return resolved;
-    // }
 
     resolvePlaceholders(
         profileData: Record<string, string>,
@@ -322,14 +320,10 @@ class TestDataManagerClass {
         };
 
         for (const [key, value] of Object.entries(profileData)) {
-
-            // ── Empty string in profile = intentionally omitted field ─────────
-            // Do NOT resolve — preserve empty so buildExcelRow skips it
             if (value === '' || value === null || value === undefined) {
                 resolved[key] = '';
                 continue;
             }
-
             if (replacements[value] !== undefined) {
                 resolved[key] = replacements[value];
             } else if (value.startsWith('__DYNAMIC__')) {

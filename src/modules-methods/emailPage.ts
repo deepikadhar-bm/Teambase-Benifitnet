@@ -18,8 +18,8 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Navigate to Email Logs Menu Layout Section
-     * Steps: Controls the side drawer menu tree by scrolling to and expanding the root email category, then triggers visibility and click routines for the secondary email logs leaf.
+     * Navigates to the Email Logs section by expanding the Emails menu in the sidebar
+     * and clicking the Email Logs link.
      */
     async navigateToEmailLogs(): Promise<void> {
         await this.scrollToElement(this.emailLog.sidebarEmailsMenu);
@@ -30,8 +30,8 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Filter Email Logs by Client and Policy Parameter Keys
-     * Steps: Expands corporate account and tracker policy dropdown nodes sequentially, clicks target filtering matches, and fires the tabular search dispatch.
+     * Filters the email log table by selecting the target client and policy from the
+     * dropdowns, then runs the search to show only matching email records.
      */
     async filterEmailLogsByClientAndPolicy(): Promise<void> {
         await this.click(this.emailLog.emailLogClientDropdown);
@@ -43,11 +43,29 @@ export class EmailLogPage extends BasePage {
         await this.click(this.emailLog.emailLogSearchButton);
     }
 
+    /**
+     * Scans the email log table page by page until a row containing the member's last name is found.
+     * On each page it reads every <small> element text and checks for the last name.
+     * After clicking Next Page it waits for the first row text to change before checking the new page,
+     * ensuring the DOM has fully loaded. Supports up to 100 pages (1000+ email log items).
+     */
     private async paginateToMemberRow(memberLastName: string): Promise<void> {
-        const MAX_PAGES = 20;
+        const MAX_PAGES = 100;
         for (let pageNum = 1; pageNum <= MAX_PAGES; pageNum++) {
-            const found = await this.emailLog.emailLogRowViewLinkByMemberLastName(memberLastName).isVisible().catch(() => false);
-            if (found) return;
+            // Wait for the table to have at least one row before checking
+            await this.page.locator('//tr//td[@colspan="2"]//small').first()
+                .waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+            // Check every <small> text on the current page for the member's last name
+            const allSmalls = this.page.locator('//tr//td[@colspan="2"]//small');
+            const count = await allSmalls.count();
+            for (let s = 0; s < count; s++) {
+                const text = await allSmalls.nth(s).textContent().catch(() => '');
+                if (text && text.includes(memberLastName)) {
+                    log.info(`"${memberLastName}" found on page ${pageNum} (row ${s + 1})`);
+                    return;
+                }
+            }
+            await this.emailLog.emailLogNextPageButton.scrollIntoViewIfNeeded();
             const nextBtn = this.emailLog.emailLogNextPageButton;
             const nextVisible = await nextBtn.isVisible().catch(() => false);
             if (!nextVisible) {
@@ -55,14 +73,65 @@ export class EmailLogPage extends BasePage {
                 return;
             }
             log.info(`"${memberLastName}" not on email log page ${pageNum} — navigating to next page`);
+            const firstRowLocator = this.page.locator('//tr//td[@colspan="2"]//small').first();
+            const textBefore = await firstRowLocator.textContent().catch(() => '');
             await this.click(nextBtn);
-            await this.page.waitForTimeout(500);
+            const deadline = Date.now() + 10000;
+            while (Date.now() < deadline) {
+                const textAfter = await firstRowLocator.textContent().catch(() => '');
+                if (textAfter !== textBefore && textAfter !== '') break;
+                await this.page.waitForTimeout(200);
+            }
         }
+        log.warn(`"${memberLastName}" not found after scanning ${MAX_PAGES} pages`);
     }
 
     /**
-     * Action: Open Detailed Individual Member Email Transaction Log Entry
-     * Steps: Paginates through email log results until the member row is found, then opens the detail view.
+     * Scans the email log table page by page until a row containing "Member Addition Bulk Request"
+     * is found — this covers both the HR email and the insurer email which share the same subject.
+     * After clicking Next Page it waits for the first row text to change before checking the new page,
+     * ensuring the DOM has fully loaded. Supports up to 100 pages (1000+ email log items).
+     */
+    private async paginateToInsurerRow(): Promise<void> {
+        const MAX_PAGES = 100;
+        for (let pageNum = 1; pageNum <= MAX_PAGES; pageNum++) {
+            // Wait for the table to have at least one row before checking
+            await this.page.locator('//tr//td[@colspan="2"]//small').first()
+                .waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+            // Check every <small> text on the current page for the insurer bulk request subject
+            const allSmalls = this.page.locator('//tr//td[@colspan="2"]//small');
+            const count = await allSmalls.count();
+            for (let s = 0; s < count; s++) {
+                const text = await allSmalls.nth(s).textContent().catch(() => '');
+                if (text && text.includes('Member Addition Bulk Request')) {
+                    log.info(`Insurer bulk request row found on page ${pageNum}`);
+                    return;
+                }
+            }
+            await this.emailLog.emailLogNextPageButton.scrollIntoViewIfNeeded();
+            const nextBtn = this.emailLog.emailLogNextPageButton;
+            const nextVisible = await nextBtn.isVisible().catch(() => false);
+            if (!nextVisible) {
+                log.info(`No next page available — insurer bulk request row not found after page ${pageNum}`);
+                return;
+            }
+            log.info(`Insurer bulk request row not on email log page ${pageNum} — navigating to next page`);
+            const firstRowLocator = this.page.locator('//tr//td[@colspan="2"]//small').first();
+            const textBefore = await firstRowLocator.textContent().catch(() => '');
+            await this.click(nextBtn);
+            const deadline = Date.now() + 10000;
+            while (Date.now() < deadline) {
+                const textAfter = await firstRowLocator.textContent().catch(() => '');
+                if (textAfter !== textBefore && textAfter !== '') break;
+                await this.page.waitForTimeout(200);
+            }
+        }
+        log.warn(`Insurer bulk request row not found after scanning ${MAX_PAGES} pages`);
+    }
+
+    /**
+     * Paginates through the email log until the member row is found by last name,
+     * then clicks the View link to open the email detail view.
      */
     async openMemberEmailLogDetail(memberLastName: string): Promise<void> {
         await this.paginateToMemberRow(memberLastName);
@@ -70,17 +139,17 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Open Corporate Insurer Bulk Request Dispatch Log Detail View
-     * Steps: Tracks element layer readiness for bulk delivery tracking link indicators, and commands page layer context interaction updates.
+     * Paginates through the email log until the "Member Addition Bulk Request" row is found,
+     * then clicks the View link to open the insurer bulk request email detail view.
      */
     async openInsurerBulkRequestEmailDetail(): Promise<void> {
+        await this.paginateToInsurerRow();
         await this.waitForElementIsVisible(this.emailLog.insurerBulkRequestEmailViewLink);
         await this.click(this.emailLog.insurerBulkRequestEmailViewLink);
     }
 
     /**
-     * Action: Reverse Route Navigation Back to Index Tabular Records List
-     * Steps: Tracks presence metrics for main navigation escape targets and triggers standard click sequences.
+     * Clicks the "Back to List" button to return to the email log table from a detail view.
      */
     async clickBackToList(): Promise<void> {
         await this.waitForElementIsVisible(this.emailLog.backToListButton);
@@ -89,8 +158,8 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-     * Steps: Paginates through results until the member row is found, then asserts visibility.
+     * Paginates through the email log until the member row is found, then verifies
+     * the policy name cell is visible for that member.
      */
     async assertEmailLogRowExistsForMember(policyName: string, memberLastName: string): Promise<void> {
         await this.paginateToMemberRow(memberLastName);
@@ -99,48 +168,49 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-     * Steps: Asserts text visibility components for operational classifications addition request.
+     * Paginates to the member row and verifies the email type shows "Addition Request".
      */
     async assertEmailLogRowExistsForLastNameWithAdditionRequest(memberLastName: string): Promise<void> {
+        await this.paginateToMemberRow(memberLastName);
         await this.assertElementVisible(this.emailLog.emailLogRowByLastNameWithAdditionRequest(memberLastName));
     }
 
     /**
-     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-     * Steps: Asserts element visibility components for notification type.
+     * Paginates to the member row and verifies the notification type shows "Add Members Bulk".
      */
     async assertEmailLogRowExistsForLastNameWithNotificationType(memberLastName: string): Promise<void> {
+        await this.paginateToMemberRow(memberLastName);
         await this.assertElementVisible(this.emailLog.emailLogRowByLastNameWithNotificationType(memberLastName));
     }
 
     /**
-     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-     * Steps: Asserts element visibility components for yop email.
+     * Paginates to the member row and verifies the "To:" yopmail recipient address is correct.
      */
     async assertEmailLogRowExistsForToYopEmail(memberLastName: string, toEmail: string): Promise<void> {
+        await this.paginateToMemberRow(memberLastName);
         await this.isVisible(this.emailLog.emailDetailByLastNameWithToYopEmailLabel(memberLastName, toEmail));
     }
 
     /**
-     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-     * Steps: Asserts element visibility components for subject.
+     * Paginates to the member row and verifies the email subject line is visible.
      */
     async assertEmailLogRowExistsForToYopEmailHaveAttachments(memberLastName: string): Promise<void> {
+        await this.paginateToMemberRow(memberLastName);
         await this.isVisible(this.emailLog.emailDetailSubjectByMemberLastName(memberLastName));
     }
 
     /**
-     * Action: Assert Presence of Baseline Email Log Data Rows for Specific Corporate Members
-     * Steps: Asserts element visibility components for attachment zero.
+     * Paginates to the member row and verifies the attachment count shows 0.
+     * The attachment is on the insurer email, not on the member notification email.
      */
     async assertEmailLogRowExistsForToYopEmailHaveAttachmentsZero(memberLastName: string): Promise<void> {
+        await this.paginateToMemberRow(memberLastName);
         await this.isVisible(this.emailLog.emailLogRowByLastNameWithAttachmentZero(memberLastName));
     }
 
     /**
-     * Action: Assert Structural Visibility of Email Metadata Details Heading Box
-     * Steps: Tracks element state loops to confirm the visual presence of message detailing headings inside the framework wrapper.
+     * Verifies the "Add Members Bulk Email" heading is visible in the email detail view,
+     * confirming the correct email detail page was opened.
      */
     async assertEmailDetailHeadingIsVisible(): Promise<void> {
         await this.waitForElementIsVisible(this.emailLog.addMembersBulkEmailDetailHeading);
@@ -148,28 +218,30 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Messaging Subject Lines Contain Core Match Tokens
-     * Steps: Evaluates text node targets contextually rendered for specific member entities against safety display expectations.
+     * Verifies the email subject line contains the member's last name,
+     * confirming this detail view belongs to the correct member.
      */
     async assertEmailDetailSubjectContainsMemberName(memberLastName: string): Promise<void> {
         await this.assertElementVisible(this.emailLog.emailDetailSubjectByMemberLastName(memberLastName));
     }
 
     /**
-     * Action: Assert Insurer Bulk Payload Dispatch Subject String Layout Content
-     * Steps: Performs explicit visibility tracking checks on bulk dispatch transaction title components.
+     * Verifies the insurer bulk request email subject contains "Member Addition Bulk Request".
      */
     async assertInsurerEmailSubject(): Promise<void> {
         await this.waitForElementIsVisible(this.emailLog.insurerBulkRequestSubject);
         await this.assertElementVisible(this.emailLog.insurerBulkRequestSubject);
     }
+
     async assertInsurerEmailTo(clientName: string, emailTo: string): Promise<void> {
+        await this.paginateToInsurerRow();
         await this.waitForElementIsVisible(this.emailLog.insurerBulkRequestEmailToRow(clientName, emailTo));
         await this.assertElementVisible(this.emailLog.insurerBulkRequestEmailToRow(clientName, emailTo));
         log.info(`Insurer email row confirmed in log table — To: ${emailTo} | Client: ${clientName}`);
     }
 
     async assertInsurerEmailToViewButton(clientName: string, emailTo: string): Promise<void> {
+        await this.paginateToInsurerRow();
         await this.waitForElementIsVisible(this.emailLog.insurerBulkRequestEmailToViewButton(clientName, emailTo));
         await this.assertElementVisible(this.emailLog.insurerBulkRequestEmailToViewButton(clientName, emailTo));
         await this.click(this.emailLog.insurerBulkRequestEmailToViewButton(clientName, emailTo));
@@ -189,8 +261,7 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Destination Recipient Value Properties Mirror Intended Routing Parameters
-     * Steps: Validates message envelope fields, parses text stream outputs, writes operational reports, and applies hard string matching assertions.
+     * Reads the "To:" field in the email detail view and asserts it contains the expected email address.
      */
     async assertToEmail(expectedEmail: string): Promise<void> {
         await this.waitForElementIsVisible(this.emailLog.emailDetailToAddressField);
@@ -200,8 +271,7 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Read and Record Despatched Core Transaction Delivery Channels to System Reports
-     * Steps: Queries output fields safely to fetch string arrays and passes values cleanly into local pipeline run reports.
+     * Reads and logs the "To:" recipient address from the email detail view for audit trail purposes.
      */
     async logToEmailAddress(): Promise<void> {
         await this.waitForElementIsVisible(this.emailLog.emailDetailToAddressField);
@@ -210,8 +280,8 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Transmission Clearances and Confirmation Responses from Corporate Insurer Carriers
-     * Steps: Suspends system processes to resolve async timing updates, monitors item states, and evaluates confirmation captions.
+     * Verifies the email body contains the "captioned request has been submitted to your insurer" paragraph,
+     * confirming the email content is the member addition notification.
      */
     async assertEmailDetailRequestSubmittedToInsurer(): Promise<void> {
         await this.page.waitForTimeout(2000);
@@ -221,8 +291,7 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Client Account Attributes Displayed Within the Email Record Detail Matrix
-     * Steps: Handles specific selector timeout tracking parameters, reads row inner values, and cross-checks tracking identifiers.
+     * Reads the Company Name field in the member email detail view and asserts it matches the expected client name.
      */
     async assertEmailDetailCompanyName(expectedCompanyName: string): Promise<void> {
         await this.emailLog.emailDetailCompanyNameCell.waitFor({ state: 'visible', timeout: 30000 });
@@ -232,8 +301,7 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Carrying Insurer Allocations Displayed Inside Log Detail Dashboards
-     * Steps: Captures active carrier naming fields asynchronously, generates info trace logs, and verifies target text inclusions.
+     * Reads the Insurer field in the member email detail view and asserts it matches the expected insurer name.
      */
     async assertEmailDetailInsurer(expectedInsurer: string): Promise<void> {
         await this.emailLog.emailDetailInsurerCell.waitFor({ state: 'visible', timeout: 30000 });
@@ -243,8 +311,7 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Policy Description Parameters Registered Inside Active Log Summaries
-     * Steps: Runs field state tracking checks, reads string attributes, and matches them to upstream runtime dataset keys.
+     * Reads the Policy Name field in the member email detail view and asserts it matches the expected policy.
      */
     async assertEmailDetailPolicyName(expectedPolicyName: string): Promise<void> {
         await this.emailLog.emailDetailPolicyNameCell.waitFor({ state: 'visible', timeout: 30000 });
@@ -254,8 +321,7 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Client Corporate Entity Classifications in Bulk Request Modules
-     * Steps: Isolates explicit component layout fields, handles tracking safety constraints, and evaluates value uniformity.
+     * Reads the Company Name field in the insurer bulk request email detail and asserts it matches the expected client name.
      */
     async assertEmailDetailMembersAdditionBulkRequestCompanyName(expectedCompanyName: string): Promise<void> {
         await this.emailLog.MemberAdditionBulkRequestCompanyName.waitFor({ state: 'visible', timeout: 30000 });
@@ -265,8 +331,7 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Registered Underwriter Parameters in Bulk Addition Despatches
-     * Steps: Validates locator readiness, fetches active text parameters from specific element boxes, and runs clean value tests.
+     * Reads the Insurer field in the insurer bulk request email detail and asserts it matches the expected insurer name.
      */
     async assertEmailDetailMembersAdditionBulkRequestInsurer(expectedInsurer: string): Promise<void> {
         await this.emailLog.MemberAdditionBulkRequestInsurer.waitFor({ state: 'visible', timeout: 30000 });
@@ -276,8 +341,7 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Targeted Healthcare Policy Frameworks Mapped inside Bulk Ingestion Messages
-     * Steps: monitors insurance program text elements, writes verification logs, and performs text content matches.
+     * Reads the Policy Name field in the insurer bulk request email detail and asserts it matches the expected policy.
      */
     async assertEmailDetailMembersAdditionBulkRequestPolicyName(expectedPolicyName: string): Promise<void> {
         await this.emailLog.MemberAdditionBulkRequestPolicyName.waitFor({ state: 'visible', timeout: 30000 });
@@ -287,8 +351,7 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Internal Operational Tier Category Details Stored in Transaction Logs
-     * Steps: Pulls data properties from localized categorical labels and validates structure layouts via deep matches.
+     * Reads the Policy Category field in the member email detail view and asserts it matches the expected category.
      */
     async assertEmailDetailPolicyCategory(expectedCategory: string): Promise<void> {
         await this.emailLog.emailDetailPolicyCategoryCell.waitFor({ state: 'visible', timeout: 30000 });
@@ -298,8 +361,7 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Linked Staff Tracking Numbers Referenced in Transaction Files
-     * Steps: Reads index parameters from corresponding individual data slots to maintain corporate ledger integrity.
+     * Reads the Employee Number field in the member email detail view and asserts it matches the expected employee number.
      */
     async assertEmailDetailEmployeeNumber(expectedEmployeeNumber: string): Promise<void> {
         await this.emailLog.emailDetailEmployeeNumberCell.waitFor({ state: 'visible', timeout: 30000 });
@@ -309,8 +371,7 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Specific Target Member Account Name Elements Inside Message Data Blocks
-     * Steps: Evaluates text node targets contextually rendered for specific member entities against baseline configuration entries.
+     * Reads the Member Name field in the email detail view and asserts it contains the expected member name.
      */
     async assertEmailDetailMemberName(expectedMemberName: string): Promise<void> {
         await this.emailLog.emailDetailMemberNameCell.waitFor({ state: 'visible', timeout: 30000 });
@@ -320,8 +381,7 @@ export class EmailLogPage extends BasePage {
     }
 
     /**
-     * Action: Assert Structural Payload Names and Metadata Tags of Outbound Email Attachments
-     * Steps: Evaluates generated spreadsheet attachment labels dynamically against corporate template name configurations.
+     * Reads the attachment file name in the email detail view and asserts it contains the expected file name keyword.
      */
     async assertAttachmentFileNameContains(expectedFileName: string): Promise<void> {
         await this.waitForElementIsVisible(this.emailLog.MemberAdditionBulkRequestMemberListAttachment);
@@ -383,7 +443,7 @@ export class EmailLogPage extends BasePage {
         expect(policyNameCell).toContain(capturedMedicalPolicyName);
 
         const HEADER_ROW = 11;
-        const DATA_ROW = 12 + memberIndex;   // ← dynamic row per member
+        const DATA_ROW = 12 + memberIndex;
         const MAX_COL = 50;
 
         const headerToCol: Record<string, number> = {};
@@ -429,6 +489,36 @@ export class EmailLogPage extends BasePage {
         log.info(`Attachment Excel — Member ${memberIndex + 1} (row ${DATA_ROW}) all verifications passed`);
     }
 
+    /**
+     * Downloads the MemberList attachment Excel once and verifies all member rows.
+     * Completely dynamic — works for 3, 25, 40, or any number of members.
+     */
+    async downloadAndVerifyAllAttachmentExcelRows(
+        capturedClientName: string,
+        capturedMedicalPolicyName: string,
+        members: Array<{
+            lastName: string;
+            employeeNumber: string;
+            email: string;
+            nationalIdNumber: string;
+            maritalStatus?: string;
+        }>
+    ): Promise<void> {
+        log.info(`Downloading MemberList attachment Excel — will verify all ${members.length} member rows from this single file`);
+        const attachmentFilePath = await this.downloadAttachmentExcel(capturedClientName, capturedMedicalPolicyName);
+
+        for (let i = 0; i < members.length; i++) {
+            const member = members[i];
+            log.section(`Member ${i + 1} of ${members.length} — MemberList attachment Excel row verification (${member.lastName})`);
+            log.info(`Verifying Member ${i + 1} (${member.lastName}) — checking 9 fields: Last Name, Employee No, Policy, Category, Relation, Marital Status, Nationality, National ID, Email`);
+            await this.verifyAttachmentExcelRow(attachmentFilePath, i, capturedClientName, capturedMedicalPolicyName, member);
+            log.sectionEnd(`Member ${i + 1} of ${members.length} — MemberList attachment Excel row verification (${member.lastName})`);
+            log.pass(`Member ${i + 1} of ${members.length} — All 9 MemberList attachment Excel fields verified for ${member.lastName}`);
+        }
+
+        log.pass(`All ${members.length} member rows verified in MemberList attachment Excel`);
+    }
+
     async downloadAndVerifyMemberAdditionReportExcel(
         capturedMedicalPolicyName: string,
         expectedTpaName: string,
@@ -464,5 +554,118 @@ export class EmailLogPage extends BasePage {
             expectedTpaName,
             expectedEndorsementType
         );
+    }
+
+    // ── Dynamic all-member email log verification ─────────────────────────────
+
+    /**
+     * Verifies all email log rows for every member in the runtimeMembers array.
+     * Completely dynamic — works for 3, 25, 40, or any number of members.
+     */
+    async verifyAllMemberEmailLogRows(
+        runtimeMembers: Array<{
+            lastName: string;
+            email: string;
+            employeeNumber: string;
+        }>,
+        capturedClientName: string,
+        capturedMedicalPolicyName: string,
+        policyCategory: string,
+        expectedInsurer: string
+    ): Promise<void> {
+        const totalMembers = runtimeMembers.length;
+        log.info(`Starting email log verification for all ${totalMembers} members`);
+
+        for (let i = 0; i < totalMembers; i++) {
+            const member = runtimeMembers[i];
+
+            log.section(`Member ${i + 1} of ${totalMembers} — Email log row verification (${member.lastName})`);
+
+            log.info(`Paginating to email log row for member: ${member.lastName}`);
+            await this.paginateToMemberRow(member.lastName);
+
+            log.info(`Verifying email log row exists for member: ${member.lastName} under policy: ${capturedMedicalPolicyName}`);
+            await this.isVisible(this.emailLog.emailLogPolicyCellByMemberLastName(member.lastName, capturedMedicalPolicyName));
+
+            log.info(`Verifying email type shows "Addition Request" for member: ${member.lastName}`);
+            await this.assertElementVisible(this.emailLog.emailLogRowByLastNameWithAdditionRequest(member.lastName));
+
+            log.info(`Verifying notification type is correct for member: ${member.lastName}`);
+            await this.assertElementVisible(this.emailLog.emailLogRowByLastNameWithNotificationType(member.lastName));
+
+            log.info(`Verifying email was sent to correct yopmail address: ${member.email}`);
+            await this.isVisible(this.emailLog.emailDetailByLastNameWithToYopEmailLabel(member.lastName, member.email));
+
+            log.info(`Verifying email attachment indicator is present for member: ${member.lastName}`);
+            await this.isVisible(this.emailLog.emailDetailSubjectByMemberLastName(member.lastName));
+
+            log.info(`Verifying member notification email has 0 attachments (attachment is on the insurer email, not this one)`);
+            await this.isVisible(this.emailLog.emailLogRowByLastNameWithAttachmentZero(member.lastName));
+
+            log.info(`Opening email detail view for member: ${member.lastName}`);
+            await this.click(this.emailLog.emailLogRowViewLinkByMemberLastName(member.lastName));
+
+            log.info(`Verifying email detail heading is visible — confirms correct email was opened`);
+            await this.waitForElementIsVisible(this.emailLog.addMembersBulkEmailDetailHeading);
+            await this.assertElementVisible(this.emailLog.addMembersBulkEmailDetailHeading);
+
+            log.info(`Verifying email subject line contains member name: ${member.lastName}`);
+            await this.assertElementVisible(this.emailLog.emailDetailSubjectByMemberLastName(member.lastName));
+
+            log.info(`Verifying email body contains "Request submitted to insurer" paragraph`);
+            await this.page.waitForTimeout(2000);
+            await this.emailLog.captionRequestSubmittedToInsurer.waitFor({ state: 'visible', timeout: 30000 });
+            await this.assertElementVisible(this.emailLog.captionRequestSubmittedToInsurer);
+
+            log.info(`Verifying company name in email detail: expected "${capturedClientName}"`);
+            await this.emailLog.emailDetailCompanyNameCell.waitFor({ state: 'visible', timeout: 30000 });
+            const company = (await this.emailLog.emailDetailCompanyNameCell.textContent())?.trim() ?? '';
+            expect(company).toContain(capturedClientName);
+            log.info(`Company name verified: "${company}"`);
+
+            log.info(`Verifying insurer name in email detail: expected "${expectedInsurer}"`);
+            await this.emailLog.emailDetailInsurerCell.waitFor({ state: 'visible', timeout: 30000 });
+            const insurer = (await this.emailLog.emailDetailInsurerCell.textContent())?.trim() ?? '';
+            expect(insurer).toContain(expectedInsurer);
+            log.info(`Insurer name verified: "${insurer}"`);
+
+            log.info(`Verifying policy name in email detail: expected "${capturedMedicalPolicyName}"`);
+            await this.emailLog.emailDetailPolicyNameCell.waitFor({ state: 'visible', timeout: 30000 });
+            const policy = (await this.emailLog.emailDetailPolicyNameCell.textContent())?.trim() ?? '';
+            expect(policy).toContain(capturedMedicalPolicyName);
+            log.info(`Policy name verified: "${policy}"`);
+
+            log.info(`Verifying policy category in email detail: expected "${policyCategory}"`);
+            await this.emailLog.emailDetailPolicyCategoryCell.waitFor({ state: 'visible', timeout: 30000 });
+            const category = (await this.emailLog.emailDetailPolicyCategoryCell.textContent())?.trim() ?? '';
+            expect(category).toContain(policyCategory);
+            log.info(`Policy category verified: "${category}"`);
+
+            log.info(`Verifying employee number in email detail: expected "${member.employeeNumber}"`);
+            await this.emailLog.emailDetailEmployeeNumberCell.waitFor({ state: 'visible', timeout: 30000 });
+            const empNo = (await this.emailLog.emailDetailEmployeeNumberCell.textContent())?.trim() ?? '';
+            expect(empNo).toContain(member.employeeNumber);
+            log.info(`Employee number verified: "${empNo}"`);
+
+            log.sectionEnd(`Member ${i + 1} of ${totalMembers} — Email log row verification (${member.lastName})`);
+            log.pass(`Member ${i + 1} of ${totalMembers} — All 14 email log fields verified for ${member.lastName}`);
+
+            if (i < totalMembers - 1) {
+                log.info(`Returning to email log list to verify member ${i + 2} of ${totalMembers}`);
+                await this.waitForElementIsVisible(this.emailLog.backToListButton);
+                await this.scrollIntoView(this.emailLog.backToListButton);
+                await this.click(this.emailLog.backToListButton);
+                log.info(`Re-filtering email logs for member ${i + 2} of ${totalMembers}`);
+                await this.click(this.emailLog.emailLogClientDropdown);
+                await this.waitForElementIsVisible(this.emailLog.emailLogTargetClientOption);
+                await this.click(this.emailLog.emailLogTargetClientOption);
+                await this.click(this.emailLog.emailLogPolicyDropdown);
+                await this.waitForElementIsVisible(this.emailLog.emailLogTargetPolicyOption);
+                await this.click(this.emailLog.emailLogTargetPolicyOption);
+                await this.click(this.emailLog.emailLogSearchButton);
+            }
+        }
+
+        log.pass(`All ${totalMembers} member notification emails fully verified`);
     }
 }
